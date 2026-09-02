@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scan Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --backdrop:#F1ECE6;
+    --ink:#241C18;
+    --muted:#7A6F65;
+    --line:#DCD3C8;
+    --accent:#7A1228;
+    --accent-soft:#F3E1E4;
+    --surface:#FFFFFF;
+    --good:#2F6E3F;
+    --good-soft:#E4F0E5;
+    --warn:#8A5A12;
+    --warn-soft:#F6EAD6;
+    --card-ink:#17110F;
+    --card-paper:#FFFFFF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --backdrop:#171310;
+      --ink:#EDE6DF;
+      --muted:#9C9086;
+      --line:#38312B;
+      --accent:#E3899E;
+      --accent-soft:#3A1E24;
+      --surface:#1F1A16;
+      --good:#7FCB8F;
+      --good-soft:#1E2E20;
+      --warn:#E3B15E;
+      --warn-soft:#332510;
+    }
+  }
+  :root[data-theme="dark"]{
+    --backdrop:#171310;
+    --ink:#EDE6DF;
+    --muted:#9C9086;
+    --line:#38312B;
+    --accent:#E3899E;
+    --accent-soft:#3A1E24;
+    --surface:#1F1A16;
+    --good:#7FCB8F;
+    --good-soft:#1E2E20;
+    --warn:#E3B15E;
+    --warn-soft:#332510;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--backdrop);
+    color:var(--ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--accent-soft); }
+
+  .page{ max-width:720px; margin:0 auto; padding:2rem 1.1rem 4rem; display:flex; flex-direction:column; gap:1.75rem; }
+
+  header{ display:flex; flex-direction:column; gap:.4rem; }
+  .kicker{ font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
+  h1{ font-family:"Fraunces", Georgia, serif; font-weight:600; font-size:1.9rem; letter-spacing:-.01em; margin:0; text-wrap:balance; }
+  .sub{ font-size:.92rem; color:var(--muted); line-height:1.55; text-wrap:balance; max-width:56ch; }
+
+  section{ display:flex; flex-direction:column; gap:.7rem; }
+  .step-label{ display:flex; align-items:center; gap:.5rem; font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .step-num{ display:inline-flex; align-items:center; justify-content:center; width:1.3rem; height:1.3rem; border-radius:50%; background:var(--accent); color:var(--accent-soft); font-size:.68rem; font-weight:600; }
+
+  .panel{ background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:1rem; }
+
+  .filebtn{ display:inline-flex; align-items:center; gap:.5rem; font-size:.88rem; font-weight:600; background:var(--accent); color:var(--accent-soft); border-radius:6px; padding:.65rem 1.1rem; cursor:pointer; border:none; width:fit-content; }
+  .filebtn input{ display:none; }
+  .hint{ font-size:.8rem; color:var(--muted); line-height:1.5; }
+
+  .stage{ position:relative; width:100%; border-radius:6px; overflow:hidden; background:#00000010; touch-action:none; }
+  .stage canvas{ display:block; width:100%; height:auto; }
+  .handle{
+    position:absolute; width:22px; height:22px; margin:-11px 0 0 -11px;
+    border-radius:50%; border:2.5px solid var(--accent); background:rgba(122,18,40,.18);
+    cursor:grab; touch-action:none;
+  }
+  .handle::after{ content:""; position:absolute; inset:7px; border-radius:50%; background:var(--accent); }
+
+  .btnrow{ display:flex; gap:.6rem; flex-wrap:wrap; }
+  .btn{ font-family:"IBM Plex Sans", sans-serif; font-size:.85rem; font-weight:600; border-radius:6px; padding:.6rem 1.05rem; border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer; }
+  .btn.primary{ background:var(--accent); color:var(--accent-soft); border-color:transparent; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn:focus-visible, .filebtn:focus-visible, .handle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  .legend{ display:flex; gap:1rem; flex-wrap:wrap; font-size:.78rem; color:var(--muted); }
+  .legend span{ display:inline-flex; align-items:center; gap:.35rem; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .dot.filled{ background:var(--good); }
+  .dot.empty{ border:1.5px solid var(--muted); }
+  .dot.unsure{ background:var(--warn); }
+
+  table.results{ width:100%; border-collapse:collapse; font-size:.86rem; font-variant-numeric:tabular-nums; }
+  table.results caption{ text-align:left; font-family:"Fraunces", serif; font-weight:600; font-size:1.05rem; margin-bottom:.5rem; }
+  table.results th{ text-align:left; font-family:"IBM Plex Mono", monospace; font-size:.68rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:500; padding:.4rem .5rem; border-bottom:1px solid var(--line); }
+  table.results td{ padding:.45rem .5rem; border-bottom:1px solid var(--line); }
+  table.results tr:last-child td{ border-bottom:none; }
+  .chip{ display:inline-flex; align-items:center; gap:.35rem; padding:.15rem .5rem; border-radius:99px; font-size:.78rem; font-weight:600; }
+  .chip.ok{ background:var(--good-soft); color:var(--good); }
+  .chip.review{ background:var(--warn-soft); color:var(--warn); }
+  .block-caption{ font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-top:1.1rem; }
+
+  details.debug{ font-size:.8rem; }
+  details.debug summary{ cursor:pointer; color:var(--muted); font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; }
+  .debug-table{ width:100%; border-collapse:collapse; margin-top:.6rem; font-variant-numeric:tabular-nums; }
+  .debug-table th,.debug-table td{ padding:.25rem .4rem; border-bottom:1px solid var(--line); text-align:left; font-size:.74rem; }
+  textarea.map{ width:100%; min-height:8rem; margin-top:.6rem; font-family:"IBM Plex Mono", monospace; font-size:.7rem; background:var(--backdrop); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:.6rem; resize:vertical; }
+
+  .status{ font-size:.85rem; color:var(--muted); }
+
+  /* hidden reference sheet, used only to measure real bubble geometry — never shown */
+  #refwrap{ position:fixed; left:-99999px; top:0; }
+  #refwrap .sheet{
+    width:148mm; height:210mm; background:var(--card-paper); color:var(--card-ink);
+    position:relative; font-family:"IBM Plex Sans", sans-serif; padding:9mm 10mm;
+    display:flex; flex-direction:column;
+  }
+  #refwrap .reg{ position:absolute; width:6mm; height:6mm; background:var(--card-ink); }
+  #refwrap .reg-tl{ top:5mm; left:5mm; }
+  #refwrap .reg-tr{ top:5mm; right:5mm; }
+  #refwrap .reg-bl{ bottom:5mm; left:5mm; }
+  #refwrap .reg-br{ bottom:5mm; right:5mm; }
+  #refwrap .head{ padding:0 9mm 4mm; border-bottom:.4mm solid var(--card-ink); margin-bottom:3mm; }
+  #refwrap .head-kicker{ font-family:"IBM Plex Mono", monospace; font-size:2.6mm; line-height:2.8mm; letter-spacing:.12em; text-transform:uppercase; }
+  #refwrap .head-title{ font-family:"Fraunces", serif; font-weight:600; font-size:6.2mm; line-height:6.4mm; letter-spacing:-.01em; margin:.3mm 0 2.5mm; }
+  #refwrap .fields{ display:grid; grid-template-columns:1fr 1fr; column-gap:6mm; row-gap:2mm; }
+  #refwrap .field{ grid-column:span 1; }
+  #refwrap .field.wide{ grid-column:1 / -1; }
+  #refwrap .field-label{ font-family:"IBM Plex Mono", monospace; font-size:2.3mm; line-height:2.4mm; letter-spacing:.06em; text-transform:uppercase; display:block; margin-bottom:.8mm; }
+  #refwrap .field-rule{ border-bottom:.3mm solid var(--card-ink); height:3.2mm; }
+  #refwrap .blocks{ flex:1; display:flex; flex-direction:column; }
+  #refwrap .block{ height:25%; flex:none; display:flex; flex-direction:column; justify-content:flex-start; gap:.7mm; padding:1mm 9mm; }
+  #refwrap .block + .block{ border-top:.25mm solid #C9C2BA; }
+  #refwrap .block-head{ display:flex; align-items:baseline; gap:2.6mm; margin-bottom:.2mm; }
+  #refwrap .block-badge{ font-family:"Fraunces", serif; font-weight:700; font-size:4.6mm; line-height:4.6mm; width:8mm; }
+  #refwrap .block-name{ font-family:"IBM Plex Mono", monospace; font-size:2.1mm; line-height:2.4mm; letter-spacing:.1em; text-transform:uppercase; color:#4A423B; }
+  #refwrap .rowgrid{ display:grid; grid-template-columns:15mm 9mm 1fr 9mm; align-items:center; column-gap:2mm; height:3.8mm; }
+  #refwrap .attr-label{ font-size:2.7mm; font-weight:500; }
+  #refwrap .scale-end{ font-family:"IBM Plex Mono", monospace; font-size:2mm; color:#5B534B; letter-spacing:.02em; }
+  #refwrap .scale-end.right{ text-align:right; }
+  #refwrap .bubbles{ display:flex; justify-content:space-between; align-items:center; }
+  #refwrap .bubble{ width:3mm; height:3mm; border-radius:50%; border:.35mm solid var(--card-ink); background:transparent; }
+  #refwrap .overall{ margin-top:.6mm; padding:.8mm 2mm; border:.3mm solid var(--card-ink); border-radius:1mm; display:grid; grid-template-columns:15mm 1fr; align-items:center; column-gap:2mm; }
+  #refwrap .overall-label{ font-size:2.9mm; line-height:3.2mm; font-weight:600; }
+  #refwrap .overall-bubbles{ display:flex; flex-direction:column; gap:.4mm; }
+  #refwrap .overall-row{ display:flex; justify-content:space-between; }
+  #refwrap .overall-row .bubble{ width:3mm; height:3mm; }
+  #refwrap .overall-ticks{ display:flex; justify-content:space-between; }
+  #refwrap .overall-ticks span{ font-family:"IBM Plex Mono", monospace; font-size:1.7mm; line-height:1.8mm; color:#5B534B; width:3mm; text-align:center; }
+  #refwrap .one-word{ margin-top:.7mm; display:flex; align-items:baseline; gap:2mm; }
+  #refwrap .ow-label{ font-family:"IBM Plex Mono", monospace; font-size:2.1mm; line-height:2.4mm; letter-spacing:.04em; text-transform:uppercase; white-space:nowrap; color:#4A423B; }
+  #refwrap .ow-line{ flex:1; border-bottom:.3mm solid var(--card-ink); height:2.8mm; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="kicker">card-v1 · offline prototype</div>
+    <h1>Scan Test</h1>
+    <p class="sub">
+      Runs entirely on this device — corner detection, perspective correction
+      and bubble reads are plain canvas math, no upload, no network call.
+      Photograph a filled card (or a printed/rendered copy of one), drag the
+      four corner handles onto the true corner marks, then read it back.
+    </p>
+  </header>
+
+  <section>
+    <div class="step-label"><span class="step-num">1</span> Photo</div>
+    <div class="panel" style="gap:.8rem; display:flex; flex-direction:column;">
+      <label class="filebtn">
+        <input type="file" accept="image/*" capture="environment" id="photoInput">
+        Take or choose a photo
+      </label>
+      <p class="hint" id="photoHint">No photo yet. Corner marks are auto-detected near each image corner — drag a handle if one lands on the wrong spot.</p>
+      <div class="stage" id="stage" hidden>
+        <canvas id="srcCanvas"></canvas>
+        <div class="handle" id="h-tl" tabindex="0"></div>
+        <div class="handle" id="h-tr" tabindex="0"></div>
+        <div class="handle" id="h-bl" tabindex="0"></div>
+        <div class="handle" id="h-br" tabindex="0"></div>
+      </div>
+      <div class="btnrow" id="warpRow" hidden>
+        <button class="btn primary" id="warpBtn">Warp &amp; read</button>
+        <span class="status" id="status"></span>
+      </div>
+    </div>
+  </section>
+
+  <section id="resultSection" hidden>
+    <div class="step-label"><span class="step-num">2</span> Corrected read</div>
+    <div class="panel" style="display:flex; flex-direction:column; gap:.8rem;">
+      <div class="stage"><canvas id="dstCanvas"></canvas></div>
+      <div class="legend">
+        <span><span class="dot filled"></span> read as filled</span>
+        <span><span class="dot empty"></span> read as empty</span>
+        <span><span class="dot unsure"></span> ambiguous — flagged for review</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="tableSection" hidden>
+    <div class="step-label"><span class="step-num">3</span> Read-back</div>
+    <div class="panel">
+      <table class="results" id="resultsTable"></table>
+      <p class="hint" style="margin-top:.9rem;">
+        “In one word” isn't read here — in the real pipeline that box is the
+        one crop sent to a vision model; everything else stays local, per
+        the scan pipeline in <code>SPEC.md</code>.
+      </p>
+    </div>
+  </section>
+
+  <section id="debugSection" hidden>
+    <details class="debug">
+      <summary>Debug — raw luminance reads &amp; coordinate map</summary>
+      <div class="panel" style="margin-top:.6rem;">
+        <p class="hint" id="calibLine"></p>
+        <table class="debug-table" id="debugTable"></table>
+        <p class="hint" style="margin-top:.8rem;">card-v1 coordinate map (mm, from the live rendered layout):</p>
+        <textarea class="map" id="mapOut" readonly></textarea>
+      </div>
+    </details>
+  </section>
+</div>
+
+<!-- hidden reference sheet: identical markup/CSS to card-v1.html, used only to measure real bubble positions -->
+<div id="refwrap">
+  <div class="sheet" id="refsheet">
+    <div class="reg reg-tl" data-reg="tl"></div>
+    <div class="reg reg-tr" data-reg="tr"></div>
+    <div class="reg reg-bl" data-reg="bl"></div>
+    <div class="reg reg-br" data-reg="br"></div>
+    <div class="head">
+      <div class="head-kicker">card-v1</div>
+      <div class="head-title">Wine Flight Card</div>
+      <div class="fields">
+        <div class="field"><span class="field-label">Event</span><div class="field-rule"></div></div>
+        <div class="field"><span class="field-label">Date</span><div class="field-rule"></div></div>
+        <div class="field wide"><span class="field-label">Taster</span><div class="field-rule"></div></div>
+      </div>
+    </div>
+    <div class="blocks" id="refblocks"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const PXMM = 96 / 25.4;               // fixed CSS constant: 1mm is always this many CSS px
+  const CANVAS_PXMM = 5;                // resolution we render the corrected sheet at
+  const SHEET_W_MM = 148, SHEET_H_MM = 210;
+  const DST_W = Math.round(SHEET_W_MM * CANVAS_PXMM);
+  const DST_H = Math.round(SHEET_H_MM * CANVAS_PXMM);
+  const CALIB_MM = { x: 3, y: 105 };    // guaranteed-blank margin strip, left of the reg marks
+  const ATTRS = [
+    ["body","Body"], ["acidity","Acidity"], ["tannin","Tannin"], ["sweetness","Sweetness"]
+  ];
+  const WORK_MAX_DIM = 1600;
+
+  // ---------- 1. build the coordinate map from the real rendered reference sheet ----------
+  const refblocks = document.getElementById("refblocks");
+  const blockDefs = [
+    { letter:"A", name:"Wine A" }, { letter:"B", name:"Wine B" },
+    { letter:"C", name:"Wine C" }, { letter:"D", name:"Wine D" }
+  ];
+  function bubbleRow(count){
+    let html = "";
+    for (let i=0;i<count;i++) html += '<span class="bubble"></span>';
+    return html;
+  }
+  blockDefs.forEach((b, idx) => {
+    const el = document.createElement("div");
+    el.className = "block";
+    el.dataset.block = idx;
+    el.innerHTML = `
+      <div class="block-head"><span class="block-badge">${b.letter}</span><span class="block-name">${b.name}</span></div>
+      ${ATTRS.map(([key,label])=>`
+        <div class="rowgrid" data-attr="${key}">
+          <span class="attr-label">${label}</span><span class="scale-end">·</span>
+          <div class="bubbles">${bubbleRow(5)}</div><span class="scale-end right">·</span>
+        </div>`).join("")}
+      <div class="overall" data-attr="overall">
+        <span class="overall-label">Overall</span>
+        <div class="overall-bubbles">
+          <div class="overall-row">${bubbleRow(10)}</div>
+          <div class="overall-ticks">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<span>${n}</span>`).join("")}</div>
+        </div>
+      </div>
+      <div class="one-word"><span class="ow-label">In one word</span><div class="ow-line"></div></div>
+    `;
+    refblocks.appendChild(el);
+  });
+
+  let MAP = null; // { reg:{tl,tr,bl,br}(mm), calib(mm), blocks:[{body:[{score,x,y}],...,overall:[...]}] }
+
+  async function buildMap(){
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+    const sheet = document.getElementById("refsheet");
+    const sheetRect = sheet.getBoundingClientRect();
+    const toMM = (rect) => ({
+      x: (rect.left + rect.width/2 - sheetRect.left) / PXMM,
+      y: (rect.top + rect.height/2 - sheetRect.top) / PXMM
+    });
+
+    const reg = {};
+    sheet.querySelectorAll(".reg").forEach(el => { reg[el.dataset.reg] = toMM(el.getBoundingClientRect()); });
+
+    const blocks = [];
+    sheet.querySelectorAll(".block").forEach(blockEl => {
+      const entry = {};
+      ATTRS.forEach(([key]) => {
+        const row = blockEl.querySelector(`.rowgrid[data-attr="${key}"]`);
+        entry[key] = Array.from(row.querySelectorAll(".bubble")).map((b,i) => {
+          const m = toMM(b.getBoundingClientRect());
+          return { score: i+1, x:m.x, y:m.y };
+        });
+      });
+      const overallEl = blockEl.querySelector('.overall[data-attr="overall"]');
+      entry.overall = Array.from(overallEl.querySelectorAll(".bubble")).map((b,i) => {
+        const m = toMM(b.getBoundingClientRect());
+        return { score: i+1, x:m.x, y:m.y };
+      });
+      blocks.push(entry);
+    });
+
+    MAP = { reg, calib: CALIB_MM, blocks };
+    document.getElementById("mapOut").value = JSON.stringify(MAP, null, 1);
+  }
+
+  // ---------- 2. photo handling ----------
+  const photoInput = document.getElementById("photoInput");
+  const photoHint = document.getElementById("photoHint");
+  const stage = document.getElementById("stage");
+  const srcCanvas = document.getElementById("srcCanvas");
+  const srcCtx = srcCanvas.getContext("2d", { willReadFrequently:true });
+  const warpRow = document.getElementById("warpRow");
+  const statusEl = document.getElementById("status");
+  const handles = { tl: byId("h-tl"), tr: byId("h-tr"), bl: byId("h-bl"), br: byId("h-br") };
+  let corners = null; // {tl:{x,y},tr,bl,br} in srcCanvas pixel space
+
+  function byId(id){ return document.getElementById(id); }
+
+  photoInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, WORK_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+      srcCanvas.width = Math.round(img.naturalWidth * scale);
+      srcCanvas.height = Math.round(img.naturalHeight * scale);
+      srcCtx.drawImage(img, 0, 0, srcCanvas.width, srcCanvas.height);
+      stage.hidden = false;
+      warpRow.hidden = false;
+      photoHint.textContent = `${srcCanvas.width}×${srcCanvas.height}px working copy — drag any handle that isn't sitting on a corner square, then warp.`;
+      autoDetectCorners();
+      layoutHandles();
+      byId("resultSection").hidden = true;
+      byId("tableSection").hidden = true;
+      byId("debugSection").hidden = true;
+    };
+    img.onerror = () => { photoHint.textContent = "Couldn't read that photo — try another file."; };
+    img.src = URL.createObjectURL(file);
+  });
+
+  function lum(r,g,b){ return 0.299*r + 0.587*g + 0.114*b; }
+
+  function detectCorner(imgData, xr0,xr1,yr0,yr1){
+    const { width:w, height:h, data } = imgData;
+    const x0 = Math.floor(xr0*w), x1 = Math.floor(xr1*w), y0 = Math.floor(yr0*h), y1 = Math.floor(yr1*h);
+    let lumMin = 255, lumMax = 0;
+    for (let y=y0;y<y1;y+=2) for (let x=x0;x<x1;x+=2){
+      const i=(y*w+x)*4, l=lum(data[i],data[i+1],data[i+2]);
+      if (l<lumMin) lumMin=l; if (l>lumMax) lumMax=l;
+    }
+    const threshold = lumMin + (lumMax-lumMin)*0.35;
+    let sumW=0,sumX=0,sumY=0;
+    for (let y=y0;y<y1;y+=2) for (let x=x0;x<x1;x+=2){
+      const i=(y*w+x)*4, l=lum(data[i],data[i+1],data[i+2]);
+      if (l<=threshold){ const wgt=255-l; sumW+=wgt; sumX+=wgt*x; sumY+=wgt*y; }
+    }
+    if (sumW===0) return { x:(x0+x1)/2, y:(y0+y1)/2 };
+    return { x:sumX/sumW, y:sumY/sumW };
+  }
+
+  function autoDetectCorners(){
+    const imgData = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
+    corners = {
+      tl: detectCorner(imgData, 0,0.42, 0,0.42),
+      tr: detectCorner(imgData, 0.58,1, 0,0.42),
+      bl: detectCorner(imgData, 0,0.42, 0.58,1),
+      br: detectCorner(imgData, 0.58,1, 0.58,1)
+    };
+  }
+
+  function layoutHandles(){
+    Object.keys(handles).forEach(k => {
+      const c = corners[k];
+      handles[k].style.left = (c.x / srcCanvas.width * 100) + "%";
+      handles[k].style.top = (c.y / srcCanvas.height * 100) + "%";
+    });
+  }
+
+  Object.keys(handles).forEach(k => {
+    const el = handles[k];
+    el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const rect = stage.getBoundingClientRect();
+        const fx = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+        const fy = Math.min(1, Math.max(0, (ev.clientY - rect.top) / rect.height));
+        corners[k] = { x: fx*srcCanvas.width, y: fy*srcCanvas.height };
+        el.style.left = (fx*100)+"%"; el.style.top = (fy*100)+"%";
+      };
+      const up = (ev) => { el.releasePointerCapture(ev.pointerId); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); };
+      el.addEventListener("pointermove", move);
+      el.addEventListener("pointerup", up);
+    });
+  });
+
+  // ---------- 3. homography ----------
+  function solveLinear(Ain, bin){
+    const n = bin.length;
+    const M = Ain.map((row,i) => row.concat([bin[i]]));
+    for (let col=0; col<n; col++){
+      let pivot = col;
+      for (let r=col+1;r<n;r++) if (Math.abs(M[r][col]) > Math.abs(M[pivot][col])) pivot=r;
+      [M[col],M[pivot]] = [M[pivot],M[col]];
+      const div = M[col][col];
+      for (let c=col;c<=n;c++) M[col][c] /= div;
+      for (let r=0;r<n;r++){
+        if (r===col) continue;
+        const factor = M[r][col];
+        for (let c=col;c<=n;c++) M[r][c] -= factor*M[col][c];
+      }
+    }
+    return M.map(row => row[n]);
+  }
+
+  function solveHomography(fromPts, toPts){
+    const A=[], b=[];
+    [ "tl","tr","bl","br" ].forEach(k => {
+      const {x,y} = fromPts[k], {x:X,y:Y} = toPts[k];
+      A.push([x,y,1,0,0,0,-x*X,-y*X]); b.push(X);
+      A.push([0,0,0,x,y,1,-x*Y,-y*Y]); b.push(Y);
+    });
+    const h = solveLinear(A,b);
+    return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+  }
+
+  function applyH(h,x,y){
+    const denom = h[6]*x + h[7]*y + h[8];
+    return { x:(h[0]*x+h[1]*y+h[2])/denom, y:(h[3]*x+h[4]*y+h[5])/denom };
+  }
+
+  function sampleBilinear(imgData, x, y){
+    const { width:w, height:h, data } = imgData;
+    if (x<0||y<0||x>w-1||y>h-1) return null;
+    const x0=Math.floor(x), y0=Math.floor(y), x1=Math.min(x0+1,w-1), y1=Math.min(y0+1,h-1);
+    const fx=x-x0, fy=y-y0;
+    const i00=(y0*w+x0)*4, i10=(y0*w+x1)*4, i01=(y1*w+x0)*4, i11=(y1*w+x1)*4;
+    const out = [0,0,0];
+    for (let k=0;k<3;k++){
+      const top = data[i00+k]*(1-fx) + data[i10+k]*fx;
+      const bot = data[i01+k]*(1-fx) + data[i11+k]*fx;
+      out[k] = top*(1-fy) + bot*fy;
+    }
+    return out;
+  }
+
+  // ---------- 4. warp + read ----------
+  const dstCanvas = document.getElementById("dstCanvas");
+  const dstCtx = dstCanvas.getContext("2d");
+
+  function meanLum(imgData, cx, cy, radiusPx){
+    const { width:w, height:h, data } = imgData;
+    let sum=0, n=0;
+    const r = Math.round(radiusPx);
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+      if (dx*dx+dy*dy > r*r) continue;
+      const x=Math.round(cx)+dx, y=Math.round(cy)+dy;
+      if (x<0||y<0||x>=w||y>=h) continue;
+      const i=(y*w+x)*4;
+      sum += lum(data[i],data[i+1],data[i+2]); n++;
+    }
+    return n ? sum/n : 255;
+  }
+
+  byId("warpBtn").addEventListener("click", () => {
+    if (!MAP || !corners) return;
+    statusEl.textContent = "Processing…";
+    setTimeout(runWarpAndRead, 20);
+  });
+
+  function runWarpAndRead(){
+    dstCanvas.width = DST_W; dstCanvas.height = DST_H;
+
+    const dstCorners = {
+      tl: { x: MAP.reg.tl.x*CANVAS_PXMM, y: MAP.reg.tl.y*CANVAS_PXMM },
+      tr: { x: MAP.reg.tr.x*CANVAS_PXMM, y: MAP.reg.tr.y*CANVAS_PXMM },
+      bl: { x: MAP.reg.bl.x*CANVAS_PXMM, y: MAP.reg.bl.y*CANVAS_PXMM },
+      br: { x: MAP.reg.br.x*CANVAS_PXMM, y: MAP.reg.br.y*CANVAS_PXMM }
+    };
+    const hDstToSrc = solveHomography(dstCorners, corners);
+
+    const srcImgData = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
+    const outImgData = dstCtx.createImageData(DST_W, DST_H);
+    const out = outImgData.data;
+
+    for (let dy=0; dy<DST_H; dy++){
+      for (let dx=0; dx<DST_W; dx++){
+        const s = applyH(hDstToSrc, dx, dy);
+        const px = sampleBilinear(srcImgData, s.x, s.y);
+        const o = (dy*DST_W+dx)*4;
+        if (px){ out[o]=px[0]; out[o+1]=px[1]; out[o+2]=px[2]; out[o+3]=255; }
+        else { out[o]=235; out[o+1]=230; out[o+2]=224; out[o+3]=255; }
+      }
+    }
+    dstCtx.putImageData(outImgData, 0, 0);
+
+    const calibLum = meanLum(outImgData, MAP.calib.x*CANVAS_PXMM, MAP.calib.y*CANVAS_PXMM, 1.4*CANVAS_PXMM);
+    const FILL_DELTA = 45, UNSURE_DELTA = 20;
+
+    const debugRows = [];
+    const blockResults = MAP.blocks.map((block, bi) => {
+      const letter = "ABCD"[bi];
+      const rowResult = {};
+      ATTRS.forEach(([key,label]) => {
+        const reads = block[key].map(pt => {
+          const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.1*CANVAS_PXMM);
+          const delta = calibLum - l;
+          const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
+          debugRows.push({ block:letter, attr:label, score:pt.score, lum:l.toFixed(1), delta:delta.toFixed(1), state });
+          return { score:pt.score, state, delta };
+        });
+        rowResult[key] = summarizeRow(reads);
+      });
+      const overallReads = block.overall.map(pt => {
+        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.3*CANVAS_PXMM);
+        const delta = calibLum - l;
+        const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
+        debugRows.push({ block:letter, attr:"Overall", score:pt.score, lum:l.toFixed(1), delta:delta.toFixed(1), state });
+        return { score:pt.score, state, delta };
+      });
+      rowResult.overall = summarizeRow(overallReads);
+      return { letter, ...rowResult };
+    });
+
+    drawOverlay(outImgData, calibLum, FILL_DELTA, UNSURE_DELTA);
+    renderTable(blockResults);
+    renderDebug(debugRows, calibLum);
+
+    statusEl.textContent = "Done.";
+    byId("resultSection").hidden = false;
+    byId("tableSection").hidden = false;
+    byId("debugSection").hidden = false;
+  }
+
+  function summarizeRow(reads){
+    const filled = reads.filter(r => r.state === "filled");
+    const unsure = reads.filter(r => r.state === "unsure");
+    if (filled.length === 1 && unsure.length === 0) return { value: filled[0].score, review: false };
+    return { value: null, review: true };
+  }
+
+  function drawOverlay(outImgData, calibLum, FILL_DELTA, UNSURE_DELTA){
+    dstCtx.putImageData(outImgData, 0, 0);
+    MAP.blocks.forEach(block => {
+      const all = ATTRS.map(([k]) => block[k]).flat().concat(block.overall);
+      all.forEach(pt => {
+        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.1*CANVAS_PXMM);
+        const delta = calibLum - l;
+        const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
+        const cx = pt.x*CANVAS_PXMM, cy = pt.y*CANVAS_PXMM;
+        dstCtx.beginPath();
+        dstCtx.arc(cx, cy, 2.6*CANVAS_PXMM, 0, Math.PI*2);
+        if (state === "filled"){ dstCtx.fillStyle = "rgba(47,110,63,.55)"; dstCtx.fill(); }
+        else if (state === "unsure"){ dstCtx.strokeStyle = "#8A5A12"; dstCtx.lineWidth = 2; dstCtx.stroke(); }
+        else { dstCtx.strokeStyle = "rgba(120,110,100,.5)"; dstCtx.lineWidth = 1.2; dstCtx.stroke(); }
+      });
+    });
+  }
+
+  function renderTable(blockResults){
+    const t = byId("resultsTable");
+    let html = "";
+    blockResults.forEach(b => {
+      html += `<tr><td colspan="2" class="block-caption">Wine ${b.letter}</td></tr>`;
+      ATTRS.forEach(([key,label]) => {
+        html += rowHTML(label, b[key], 5);
+      });
+      html += rowHTML("Overall", b.overall, 10);
+    });
+    t.innerHTML = html;
+  }
+
+  function rowHTML(label, r, max){
+    const cell = r.review
+      ? `<span class="chip review">needs review</span>`
+      : `<span class="chip ok">${r.value} / ${max}</span>`;
+    return `<tr><td>${label}</td><td>${cell}</td></tr>`;
+  }
+
+  function renderDebug(rows, calibLum){
+    byId("calibLine").textContent = `Blank-paper baseline luminance: ${calibLum.toFixed(1)} / 255 (lower = darker). Filled = baseline − reading > 45, unsure = 20–45, empty ≤ 20 — placeholder thresholds, tune once you have real photos.`;
+    const t = byId("debugTable");
+    let html = "<tr><th>Wine</th><th>Attr</th><th>Score</th><th>Lum</th><th>Δ</th><th>State</th></tr>";
+    rows.forEach(r => {
+      html += `<tr><td>${r.block}</td><td>${r.attr}</td><td>${r.score}</td><td>${r.lum}</td><td>${r.delta}</td><td>${r.state}</td></tr>`;
+    });
+    t.innerHTML = html;
+  }
+
+  buildMap();
+})();
+</script>
+</body>
+</html>

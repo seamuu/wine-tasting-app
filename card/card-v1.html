@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wine Flight Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --backdrop:#F1ECE6;
+    --chrome-ink:#241C18;
+    --chrome-muted:#7A6F65;
+    --chrome-line:#DCD3C8;
+    --accent:#7A1228;
+    --accent-soft:#F3E1E4;
+    --surface:#FFFFFF;
+
+    --paper:#FFFFFF;
+    --ink:#17110F;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --backdrop:#171310;
+      --chrome-ink:#EDE6DF;
+      --chrome-muted:#9C9086;
+      --chrome-line:#38312B;
+      --accent:#E3899E;
+      --accent-soft:#3A1E24;
+      --surface:#1F1A16;
+    }
+  }
+  :root[data-theme="dark"]{
+    --backdrop:#171310;
+    --chrome-ink:#EDE6DF;
+    --chrome-muted:#9C9086;
+    --chrome-line:#38312B;
+    --accent:#E3899E;
+    --accent-soft:#3A1E24;
+    --surface:#1F1A16;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--backdrop);
+    color:var(--chrome-ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    max-width:1040px;
+    margin:0 auto;
+    padding:2.75rem 1.5rem 4rem;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2rem;
+  }
+
+  .chrome-head{
+    width:100%;
+    max-width:560px;
+    display:flex;
+    flex-direction:column;
+    gap:.5rem;
+    text-align:center;
+  }
+  .chrome-kicker{
+    font-family:"IBM Plex Mono", ui-monospace, monospace;
+    font-size:.72rem;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  .chrome-title{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:600;
+    font-size:2rem;
+    letter-spacing:-.01em;
+    text-wrap:balance;
+    margin:0;
+  }
+  .chrome-sub{
+    font-size:.92rem;
+    color:var(--chrome-muted);
+    line-height:1.5;
+    text-wrap:balance;
+  }
+
+  .toolbar{
+    display:flex;
+    align-items:center;
+    gap:.75rem;
+    flex-wrap:wrap;
+    justify-content:center;
+  }
+  .btn{
+    font-family:"IBM Plex Sans", sans-serif;
+    font-size:.85rem;
+    font-weight:600;
+    border-radius:5px;
+    padding:.6rem 1.1rem;
+    border:1px solid transparent;
+    cursor:pointer;
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:var(--accent-soft);
+  }
+  .btn-ghost{
+    background:transparent;
+    border-color:var(--chrome-line);
+    color:var(--chrome-ink);
+  }
+  .btn:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:2px;
+  }
+
+  .sheet-shell{
+    background:var(--surface);
+    padding:1.25rem;
+    border-radius:4px;
+    box-shadow:0 1px 2px rgba(0,0,0,.06), 0 18px 40px -20px rgba(0,0,0,.35);
+  }
+
+  /* ---- the printable sheet: fixed to real paper size, always black on white ---- */
+  .sheet{
+    width:148mm;
+    height:210mm;
+    background:var(--paper);
+    color:var(--ink);
+    position:relative;
+    font-family:"IBM Plex Sans", sans-serif;
+    padding:9mm 10mm;
+    display:flex;
+    flex-direction:column;
+  }
+
+  .reg{
+    position:absolute;
+    width:6mm;
+    height:6mm;
+    background:var(--ink);
+  }
+  .reg-tl{ top:5mm; left:5mm; }
+  .reg-tr{ top:5mm; right:5mm; }
+  .reg-bl{ bottom:5mm; left:5mm; }
+  .reg-br{ bottom:5mm; right:5mm; }
+
+  .head{
+    padding:0 9mm 4mm;
+    border-bottom:.4mm solid var(--ink);
+    margin-bottom:3mm;
+  }
+  .head-kicker{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2.6mm;
+    line-height:2.8mm;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+  }
+  .head-title{
+    font-family:"Fraunces", serif;
+    font-weight:600;
+    font-size:6.2mm;
+    line-height:6.4mm;
+    letter-spacing:-.01em;
+    margin:.3mm 0 2.5mm;
+  }
+  .fields{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    column-gap:6mm;
+    row-gap:2mm;
+  }
+  .field{ grid-column:span 1; }
+  .field.wide{ grid-column:1 / -1; }
+  .field-label{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2.3mm;
+    line-height:2.4mm;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--ink);
+    display:block;
+    margin-bottom:.8mm;
+  }
+  .field-rule{
+    border-bottom:.3mm solid var(--ink);
+    height:3.2mm;
+  }
+
+  .blocks{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+  }
+  .block{
+    height:25%;
+    flex:none;
+    display:flex;
+    flex-direction:column;
+    justify-content:flex-start;
+    gap:.7mm;
+    padding:1mm 9mm;
+  }
+  .block + .block{
+    border-top:.25mm solid #C9C2BA;
+  }
+
+  .block-head{
+    display:flex;
+    align-items:baseline;
+    gap:2.6mm;
+    margin-bottom:.2mm;
+  }
+  .block-badge{
+    font-family:"Fraunces", serif;
+    font-weight:700;
+    font-size:4.6mm;
+    line-height:4.6mm;
+    width:8mm;
+  }
+  .block-name{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2.1mm;
+    line-height:2.4mm;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:#4A423B;
+  }
+
+  .rowgrid{
+    display:grid;
+    grid-template-columns:15mm 9mm 1fr 9mm;
+    align-items:center;
+    column-gap:2mm;
+    height:3.8mm;
+  }
+  .attr-label{
+    font-size:2.7mm;
+    font-weight:500;
+  }
+  .scale-end{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2mm;
+    color:#5B534B;
+    letter-spacing:.02em;
+  }
+  .scale-end.right{ text-align:right; }
+  .bubbles{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .bubble{
+    width:3mm;
+    height:3mm;
+    border-radius:50%;
+    border:.35mm solid var(--ink);
+    background:transparent;
+  }
+
+  .overall{
+    margin-top:.6mm;
+    padding:.8mm 2mm;
+    border:.3mm solid var(--ink);
+    border-radius:1mm;
+    display:grid;
+    grid-template-columns:15mm 1fr;
+    align-items:center;
+    column-gap:2mm;
+  }
+  .overall-label{
+    font-size:2.9mm;
+    line-height:3.2mm;
+    font-weight:600;
+  }
+  .overall-bubbles{ display:flex; flex-direction:column; gap:.4mm; }
+  .overall-row{ display:flex; justify-content:space-between; }
+  .overall-row .bubble{ width:3mm; height:3mm; }
+  .overall-ticks{ display:flex; justify-content:space-between; }
+  .overall-ticks span{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:1.7mm;
+    line-height:1.8mm;
+    color:#5B534B;
+    width:3mm;
+    text-align:center;
+  }
+
+  .one-word{
+    margin-top:.7mm;
+    display:flex;
+    align-items:baseline;
+    gap:2mm;
+  }
+  .ow-label{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2.1mm;
+    line-height:2.4mm;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+    white-space:nowrap;
+    color:#4A423B;
+  }
+  .ow-line{
+    flex:1;
+    border-bottom:.3mm solid var(--ink);
+    height:2.8mm;
+  }
+
+  .legend{
+    max-width:560px;
+    text-align:center;
+    font-size:.82rem;
+    line-height:1.6;
+    color:var(--chrome-muted);
+  }
+  .legend b{ color:var(--chrome-ink); font-weight:600; }
+
+  @media print{
+    @page{ size:A5; margin:0; }
+    body{ background:#FFFFFF; }
+    .chrome-head, .toolbar, .legend{ display:none; }
+    .page{ padding:0; gap:0; max-width:none; }
+    .sheet-shell{ padding:0; border-radius:0; box-shadow:none; }
+    .sheet{ box-shadow:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <div class="chrome-head">
+      <div class="chrome-kicker">Card v1 · Printable A5</div>
+      <h1 class="chrome-title">Wine Flight Card</h1>
+      <p class="chrome-sub">
+        One per taster per event. Print at actual size on A5 (or A4, centred,
+        “actual size” — not “fit to page”). The four solid corner squares are
+        registration marks for the scan step — keep them inside the print
+        margins.
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="window.print()">Print card</button>
+      <span class="btn btn-ghost" style="cursor:default;">Body / Acidity / Tannin / Sweetness — 1–5 · Overall — 1–10</span>
+    </div>
+
+    <div class="sheet-shell">
+      <div class="sheet">
+        <div class="reg reg-tl"></div>
+        <div class="reg reg-tr"></div>
+        <div class="reg reg-bl"></div>
+        <div class="reg reg-br"></div>
+
+        <div class="head">
+          <div class="head-kicker">card-v1</div>
+          <div class="head-title">Wine Flight Card</div>
+          <div class="fields">
+            <div class="field">
+              <span class="field-label">Event</span>
+              <div class="field-rule"></div>
+            </div>
+            <div class="field">
+              <span class="field-label">Date</span>
+              <div class="field-rule"></div>
+            </div>
+            <div class="field wide">
+              <span class="field-label">Taster</span>
+              <div class="field-rule"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="blocks">
+          <!-- Wine block template, repeated for A–D -->
+          <div class="block">
+            <div class="block-head">
+              <span class="block-badge">A</span>
+              <span class="block-name">Wine A</span>
+            </div>
+
+            <div class="rowgrid">
+              <span class="attr-label">Body</span>
+              <span class="scale-end">Light</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Full</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Acidity</span>
+              <span class="scale-end">Soft</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Acidic</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Tannin</span>
+              <span class="scale-end">Smooth</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Grippy</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Sweetness</span>
+              <span class="scale-end">Dry</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Sweet</span>
+            </div>
+
+            <div class="overall">
+              <span class="overall-label">Overall</span>
+              <div class="overall-bubbles">
+                <div class="overall-row">
+                  <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+                </div>
+                <div class="overall-ticks">
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="one-word">
+              <span class="ow-label">In one word</span>
+              <div class="ow-line"></div>
+            </div>
+          </div>
+
+          <div class="block">
+            <div class="block-head">
+              <span class="block-badge">B</span>
+              <span class="block-name">Wine B</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Body</span>
+              <span class="scale-end">Light</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Full</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Acidity</span>
+              <span class="scale-end">Soft</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Acidic</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Tannin</span>
+              <span class="scale-end">Smooth</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Grippy</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Sweetness</span>
+              <span class="scale-end">Dry</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Sweet</span>
+            </div>
+            <div class="overall">
+              <span class="overall-label">Overall</span>
+              <div class="overall-bubbles">
+                <div class="overall-row">
+                  <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+                </div>
+                <div class="overall-ticks">
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                </div>
+              </div>
+            </div>
+            <div class="one-word">
+              <span class="ow-label">In one word</span>
+              <div class="ow-line"></div>
+            </div>
+          </div>
+
+          <div class="block">
+            <div class="block-head">
+              <span class="block-badge">C</span>
+              <span class="block-name">Wine C</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Body</span>
+              <span class="scale-end">Light</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Full</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Acidity</span>
+              <span class="scale-end">Soft</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Acidic</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Tannin</span>
+              <span class="scale-end">Smooth</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Grippy</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Sweetness</span>
+              <span class="scale-end">Dry</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Sweet</span>
+            </div>
+            <div class="overall">
+              <span class="overall-label">Overall</span>
+              <div class="overall-bubbles">
+                <div class="overall-row">
+                  <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+                </div>
+                <div class="overall-ticks">
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                </div>
+              </div>
+            </div>
+            <div class="one-word">
+              <span class="ow-label">In one word</span>
+              <div class="ow-line"></div>
+            </div>
+          </div>
+
+          <div class="block">
+            <div class="block-head">
+              <span class="block-badge">D</span>
+              <span class="block-name">Wine D</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Body</span>
+              <span class="scale-end">Light</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Full</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Acidity</span>
+              <span class="scale-end">Soft</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Acidic</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Tannin</span>
+              <span class="scale-end">Smooth</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Grippy</span>
+            </div>
+            <div class="rowgrid">
+              <span class="attr-label">Sweetness</span>
+              <span class="scale-end">Dry</span>
+              <div class="bubbles">
+                <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+              </div>
+              <span class="scale-end right">Sweet</span>
+            </div>
+            <div class="overall">
+              <span class="overall-label">Overall</span>
+              <div class="overall-bubbles">
+                <div class="overall-row">
+                  <span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span><span class="bubble"></span>
+                </div>
+                <div class="overall-ticks">
+                  <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+                </div>
+              </div>
+            </div>
+            <div class="one-word">
+              <span class="ow-label">In one word</span>
+              <div class="ow-line"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="legend">
+      <b>card-v1</b> · A5 (148 × 210 mm) · 4 wine blocks, blind-labelled A–D ·
+      Body / Acidity / Tannin / Sweetness scored 1–5, Overall scored 1–10 ·
+      corner squares are scan registration marks, not decoration.
+    </p>
+  </div>
+</body>
+</html>
