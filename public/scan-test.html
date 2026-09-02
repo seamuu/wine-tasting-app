@@ -695,6 +695,12 @@
 
     // testing hook: lets an automated harness read back exactly what the UI shows
     window.__lastRun = { blockResults, tasterResult, debugRows, blockCalib, corners, mapUsed: MAP };
+
+    // If embedded (e.g. from an event dashboard's "scan a card" section),
+    // let the parent page save this straight to the database.
+    if (window.parent !== window){
+      window.parent.postMessage({ source:"wine-flight-scan", blockResults, tasterResult }, "*");
+    }
   }
 
   function summarizeRow(reads){

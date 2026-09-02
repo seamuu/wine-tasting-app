@@ -1,0 +1,109 @@
+// Data model per SPEC.md. Two identity axes stay deliberately blind on the
+// physical card (wine A-D, taster Color+Animal) and only get resolved to
+// real names here, by the organizer, during/after scan review.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum FlightPosition {
+  A
+  B
+  C
+  D
+}
+
+enum TasterColor {
+  RED
+  ORANGE
+  YELLOW
+  GREEN
+  BLUE
+}
+
+enum TasterAnimal {
+  FOX
+  OWL
+  BEAR
+  WOLF
+}
+
+enum ScanStatus {
+  PENDING
+  NEEDS_REVIEW
+  CONFIRMED
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  name      String
+  date      DateTime
+  createdAt DateTime @default(now())
+
+  wines Wine[]
+  cards Card[]
+}
+
+model Wine {
+  id             String         @id @default(cuid())
+  eventId        String
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  flightPosition FlightPosition
+  name           String
+  producer       String?
+  vintage        Int?
+
+  ratings Rating[]
+
+  @@unique([eventId, flightPosition])
+}
+
+// One per taster per event. cardVersion pins which coordinate map (card-v1,
+// ...) the raw photo was scanned against, per SPEC.md's versioning note.
+model Card {
+  id           String        @id @default(cuid())
+  eventId      String
+  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  cardVersion  String        @default("card-v1")
+  tasterColor  TasterColor
+  tasterAnimal TasterAnimal
+  tasterName   String? // handwritten on the card, confirmed/corrected by the organizer during review
+  rawPhotoUrl  String?
+  scanStatus   ScanStatus    @default(PENDING)
+  createdAt    DateTime      @default(now())
+
+  ratings Rating[]
+
+  @@unique([eventId, tasterColor, tasterAnimal])
+}
+
+model Rating {
+  id         String   @id @default(cuid())
+  cardId     String
+  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  wineId     String
+  wine       Wine     @relation(fields: [wineId], references: [id], onDelete: Cascade)
+
+  body       Int? // 1-5
+  acidity    Int? // 1-5
+  tannin     Int? // 1-5
+  sweetness  Int? // 1-5
+  overall    Int? // 1-10
+  oneWord    String?
+
+  // per-field confidence, set null while a value is still "needs review"
+  bodyReview      Boolean @default(false)
+  acidityReview   Boolean @default(false)
+  tanninReview    Boolean @default(false)
+  sweetnessReview Boolean @default(false)
+  overallReview   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([cardId, wineId])
+}

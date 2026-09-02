@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
-const HTML_PATH = path.join(REPO_ROOT, "card", "scan-test.html");
+const HTML_PATH = path.join(REPO_ROOT, "public", "scan-test.html");
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PORT = 9333 + Math.floor(Math.random() * 500); // avoid clobbering a concurrent run
 
