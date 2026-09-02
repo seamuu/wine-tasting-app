@@ -134,11 +134,17 @@
   #refwrap .head{ padding:0 9mm 4mm; border-bottom:.4mm solid var(--card-ink); margin-bottom:3mm; }
   #refwrap .head-kicker{ font-family:"IBM Plex Mono", monospace; font-size:2.6mm; line-height:2.8mm; letter-spacing:.12em; text-transform:uppercase; }
   #refwrap .head-title{ font-family:"Fraunces", serif; font-weight:600; font-size:6.2mm; line-height:6.4mm; letter-spacing:-.01em; margin:.3mm 0 2.5mm; }
-  #refwrap .fields{ display:grid; grid-template-columns:1fr 1fr; column-gap:6mm; row-gap:2mm; }
+  #refwrap .fields{ display:grid; grid-template-columns:1fr 1fr 1fr; column-gap:5mm; }
   #refwrap .field{ grid-column:span 1; }
-  #refwrap .field.wide{ grid-column:1 / -1; }
   #refwrap .field-label{ font-family:"IBM Plex Mono", monospace; font-size:2.3mm; line-height:2.4mm; letter-spacing:.06em; text-transform:uppercase; display:block; margin-bottom:.8mm; }
   #refwrap .field-rule{ border-bottom:.3mm solid var(--card-ink); height:3.2mm; }
+  #refwrap .id-row{ display:flex; align-items:flex-end; gap:4mm; margin-top:2mm; }
+  #refwrap .id-lead{ font-family:"IBM Plex Mono", monospace; font-size:2.1mm; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; padding-bottom:.5mm; }
+  #refwrap .id-group{ display:flex; gap:2.6mm; }
+  #refwrap .id-group + .id-group{ padding-left:2.6mm; border-left:.25mm solid #C9C2BA; }
+  #refwrap .id-item{ display:flex; flex-direction:column; align-items:center; gap:.5mm; }
+  #refwrap .id-item .bubble{ width:3mm; height:3mm; }
+  #refwrap .id-item span{ font-family:"IBM Plex Mono", monospace; font-size:1.7mm; line-height:1.8mm; color:#5B534B; }
   #refwrap .blocks{ flex:1; display:flex; flex-direction:column; }
   #refwrap .block{ height:25%; flex:none; display:flex; flex-direction:column; justify-content:flex-start; gap:.7mm; padding:1mm 9mm; }
   #refwrap .block + .block{ border-top:.25mm solid #C9C2BA; }
@@ -248,7 +254,23 @@
       <div class="fields">
         <div class="field"><span class="field-label">Event</span><div class="field-rule"></div></div>
         <div class="field"><span class="field-label">Date</span><div class="field-rule"></div></div>
-        <div class="field wide"><span class="field-label">Taster</span><div class="field-rule"></div></div>
+        <div class="field"><span class="field-label">Name</span><div class="field-rule"></div></div>
+      </div>
+      <div class="id-row" id="refIdRow">
+        <span class="id-lead">You are</span>
+        <div class="id-group" data-id-group="color">
+          <div class="id-item"><span class="bubble"></span><span>Red</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Orange</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Yellow</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Green</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Blue</span></div>
+        </div>
+        <div class="id-group" data-id-group="animal">
+          <div class="id-item"><span class="bubble"></span><span>Fox</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Owl</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Bear</span></div>
+          <div class="id-item"><span class="bubble"></span><span>Wolf</span></div>
+        </div>
       </div>
     </div>
     <div class="blocks" id="refblocks"></div>
@@ -263,7 +285,7 @@
   const SHEET_W_MM = 148, SHEET_H_MM = 210;
   const DST_W = Math.round(SHEET_W_MM * CANVAS_PXMM);
   const DST_H = Math.round(SHEET_H_MM * CANVAS_PXMM);
-  const CALIB_MM = { x: 3, y: 105 };    // guaranteed-blank margin strip, left of the reg marks
+  const CALIB_X_MM = 3;                 // guaranteed-blank margin strip, left of the reg marks
   const ATTRS = [
     ["body","Body"], ["acidity","Acidity"], ["tannin","Tannin"], ["sweetness","Sweetness"]
   ];
@@ -303,7 +325,7 @@
     refblocks.appendChild(el);
   });
 
-  let MAP = null; // { reg:{tl,tr,bl,br}(mm), calib(mm), blocks:[{body:[{score,x,y}],...,overall:[...]}] }
+  let MAP = null; // { reg:{tl,tr,bl,br}(mm), taster:{color:[{label,x,y}],animal:[...],calib}, blocks:[{body:[{score,x,y}],...,overall:[...],calib:{x,y}}] }
 
   async function buildMap(){
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
@@ -334,11 +356,29 @@
         const m = toMM(b.getBoundingClientRect());
         return { score: i+1, x:m.x, y:m.y };
       });
+      // local calibration point: same safe blank column, but at this block's own
+      // vertical position — avoids judging a distant block's ink against a
+      // calibration reading taken somewhere with different lighting/shadow.
+      const allPts = ATTRS.map(([k]) => entry[k]).flat().concat(entry.overall);
+      const calibY = allPts.reduce((s,p) => s+p.y, 0) / allPts.length;
+      entry.calib = { x: CALIB_X_MM, y: calibY };
       blocks.push(entry);
     });
 
-    MAP = { reg, calib: CALIB_MM, blocks };
+    const taster = {};
+    document.getElementById("refIdRow").querySelectorAll(".id-group").forEach(group => {
+      const kind = group.dataset.idGroup;
+      taster[kind] = Array.from(group.querySelectorAll(".id-item")).map(item => {
+        const m = toMM(item.querySelector(".bubble").getBoundingClientRect());
+        return { label: item.querySelector("span:last-child").textContent, x:m.x, y:m.y };
+      });
+    });
+    const idPts = [...taster.color, ...taster.animal];
+    taster.calib = { x: CALIB_X_MM, y: idPts.reduce((s,p) => s+p.y, 0) / idPts.length };
+
+    MAP = { reg, taster, blocks };
     document.getElementById("mapOut").value = JSON.stringify(MAP, null, 1);
+    window.__mapReady = true; // testing hook: signals the coordinate map is ready to use
   }
 
   // ---------- 2. photo handling ----------
@@ -378,31 +418,91 @@
 
   function lum(r,g,b){ return 0.299*r + 0.587*g + 0.114*b; }
 
-  function detectCorner(imgData, xr0,xr1,yr0,yr1){
+  // Otsu's method: pick the luminance threshold that best splits the image into two classes.
+  function otsuThreshold(hist, total){
+    let sum = 0; for (let t=0;t<256;t++) sum += t*hist[t];
+    let sumB=0, wB=0, varMax=0, threshold=127;
+    for (let t=0;t<256;t++){
+      wB += hist[t];
+      if (wB===0) continue;
+      const wF = total - wB;
+      if (wF===0) break;
+      sumB += t*hist[t];
+      const mB = sumB/wB, mF = (sum-sumB)/wF;
+      const between = wB*wF*(mB-mF)*(mB-mF);
+      if (between > varMax){ varMax = between; threshold = t; }
+    }
+    return threshold;
+  }
+
+  // Finds the largest solid, roughly-square dark blob within one corner window.
+  // Two things matter for real photos with background clutter (desk, shadows,
+  // a notebook's binding) near the card's edges:
+  //  - the threshold is computed LOCALLY from just this window, not the whole
+  //    photo — a global threshold treats far-away clutter as equally relevant,
+  //    and can even fuse the registration mark into a same-toned neighbour
+  //    (a merged blob fails the aspect/fill checks and vanishes as a candidate
+  //    entirely, which no amount of picking-by-position can then recover);
+  //  - among whatever qualifies, we take the LARGEST, not merely the nearest
+  //    to the corner — a 6mm square is ~16x the area of a 3mm filled bubble,
+  //    so genuine size beats anything else nearby that happens to qualify.
+  function findLargestSquareInWindow(imgData, xr0, xr1, yr0, yr1){
     const { width:w, height:h, data } = imgData;
     const x0 = Math.floor(xr0*w), x1 = Math.floor(xr1*w), y0 = Math.floor(yr0*h), y1 = Math.floor(yr1*h);
-    let lumMin = 255, lumMax = 0;
-    for (let y=y0;y<y1;y+=2) for (let x=x0;x<x1;x+=2){
-      const i=(y*w+x)*4, l=lum(data[i],data[i+1],data[i+2]);
-      if (l<lumMin) lumMin=l; if (l>lumMax) lumMax=l;
+    const bw = x1-x0, bh = y1-y0, n = bw*bh;
+    const lum8 = new Uint8ClampedArray(n);
+    const hist = new Uint32Array(256);
+    for (let y=0; y<bh; y++) for (let x=0; x<bw; x++){
+      const i = ((y0+y)*w + (x0+x)) * 4;
+      const l = (0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]) | 0;
+      lum8[y*bw+x] = l; hist[l]++;
     }
-    const threshold = lumMin + (lumMax-lumMin)*0.35;
-    let sumW=0,sumX=0,sumY=0;
-    for (let y=y0;y<y1;y+=2) for (let x=x0;x<x1;x+=2){
-      const i=(y*w+x)*4, l=lum(data[i],data[i+1],data[i+2]);
-      if (l<=threshold){ const wgt=255-l; sumW+=wgt; sumX+=wgt*x; sumY+=wgt*y; }
+    const threshold = otsuThreshold(hist, n);
+    const visited = new Uint8Array(n);
+    const stack = new Int32Array(n);
+    const minSize = Math.min(bw,bh)*0.06, maxSize = Math.min(bw,bh)*0.6;
+    let best = null;
+
+    for (let start=0; start<n; start++){
+      if (visited[start] || lum8[start] >= threshold) continue;
+      let sp=0; stack[sp++]=start; visited[start]=1;
+      let area=0, sumX=0, sumY=0, minX=bw, maxX=0, minY=bh, maxY=0;
+      while (sp>0){
+        const cur = stack[--sp];
+        const cy = (cur/bw)|0, cx = cur - cy*bw;
+        area++; sumX+=cx; sumY+=cy;
+        if (cx<minX) minX=cx; if (cx>maxX) maxX=cx;
+        if (cy<minY) minY=cy; if (cy>maxY) maxY=cy;
+        if (cx>0){ const nb=cur-1; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+        if (cx<bw-1){ const nb=cur+1; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+        if (cy>0){ const nb=cur-bw; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+        if (cy<bh-1){ const nb=cur+bw; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+      }
+      const bboxW = maxX-minX+1, bboxH = maxY-minY+1;
+      if (bboxW<minSize || bboxH<minSize || bboxW>maxSize || bboxH>maxSize) continue;
+      const fillRatio = area/(bboxW*bboxH);
+      const aspect = bboxW/bboxH;
+      if (fillRatio < 0.55 || aspect < 0.55 || aspect > 1.8) continue; // excludes rule lines, glyphs, box outlines
+      if (!best || area > best.area) best = { x:sumX/area+x0, y:sumY/area+y0, area };
     }
-    if (sumW===0) return { x:(x0+x1)/2, y:(y0+y1)/2 };
-    return { x:sumX/sumW, y:sumY/sumW };
+    return best;
   }
 
   function autoDetectCorners(){
     const imgData = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
+    const w = srcCanvas.width, h = srcCanvas.height;
+    const WIN = 0.34; // generous vs. real card content, which starts ~24% in
+    const found = {
+      tl: findLargestSquareInWindow(imgData, 0,WIN, 0,WIN),
+      tr: findLargestSquareInWindow(imgData, 1-WIN,1, 0,WIN),
+      bl: findLargestSquareInWindow(imgData, 0,WIN, 1-WIN,1),
+      br: findLargestSquareInWindow(imgData, 1-WIN,1, 1-WIN,1)
+    };
     corners = {
-      tl: detectCorner(imgData, 0,0.42, 0,0.42),
-      tr: detectCorner(imgData, 0.58,1, 0,0.42),
-      bl: detectCorner(imgData, 0,0.42, 0.58,1),
-      br: detectCorner(imgData, 0.58,1, 0.58,1)
+      tl: found.tl || { x:w*0.08, y:h*0.08 },
+      tr: found.tr || { x:w*0.92, y:h*0.08 },
+      bl: found.bl || { x:w*0.08, y:h*0.92 },
+      br: found.br || { x:w*0.92, y:h*0.92 }
     };
   }
 
@@ -532,42 +632,69 @@
     }
     dstCtx.putImageData(outImgData, 0, 0);
 
-    const calibLum = meanLum(outImgData, MAP.calib.x*CANVAS_PXMM, MAP.calib.y*CANVAS_PXMM, 1.4*CANVAS_PXMM);
     const FILL_DELTA = 45, UNSURE_DELTA = 20;
+    const blockCalib = MAP.blocks.map(block =>
+      meanLum(outImgData, block.calib.x*CANVAS_PXMM, block.calib.y*CANVAS_PXMM, 1.4*CANVAS_PXMM)
+    );
+
+    // Sample radius must stay safely inside a bubble's own printed ring (radius
+    // 1.5mm, ring .35mm thick → inner edge at 1.15mm) or an empty bubble reads
+    // as partly dark just from its own outline. 1.0mm applies to every row —
+    // Overall bubbles are the same physical size as the attribute rows.
+    const READ_RADIUS_MM = 1.0;
 
     const debugRows = [];
+    const overlayPoints = []; // {x,y,state} in mm — drawn straight from these reads, never recomputed
     const blockResults = MAP.blocks.map((block, bi) => {
       const letter = "ABCD"[bi];
+      const calibLum = blockCalib[bi];
       const rowResult = {};
-      ATTRS.forEach(([key,label]) => {
-        const reads = block[key].map(pt => {
-          const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.1*CANVAS_PXMM);
-          const delta = calibLum - l;
-          const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
-          debugRows.push({ block:letter, attr:label, score:pt.score, lum:l.toFixed(1), delta:delta.toFixed(1), state });
-          return { score:pt.score, state, delta };
-        });
-        rowResult[key] = summarizeRow(reads);
-      });
-      const overallReads = block.overall.map(pt => {
-        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.3*CANVAS_PXMM);
+      function readPoint(pt, attrLabel){
+        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, READ_RADIUS_MM*CANVAS_PXMM);
         const delta = calibLum - l;
         const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
-        debugRows.push({ block:letter, attr:"Overall", score:pt.score, lum:l.toFixed(1), delta:delta.toFixed(1), state });
+        debugRows.push({ block:letter, attr:attrLabel, score:pt.score, lum:l.toFixed(1), delta:delta.toFixed(1), state });
+        overlayPoints.push({ x:pt.x, y:pt.y, state });
         return { score:pt.score, state, delta };
+      }
+      ATTRS.forEach(([key,label]) => {
+        rowResult[key] = summarizeRow(block[key].map(pt => readPoint(pt, label)));
       });
-      rowResult.overall = summarizeRow(overallReads);
+      rowResult.overall = summarizeRow(block.overall.map(pt => readPoint(pt, "Overall")));
       return { letter, ...rowResult };
     });
 
-    drawOverlay(outImgData, calibLum, FILL_DELTA, UNSURE_DELTA);
-    renderTable(blockResults);
-    renderDebug(debugRows, calibLum);
+    const tasterCalibLum = meanLum(outImgData, MAP.taster.calib.x*CANVAS_PXMM, MAP.taster.calib.y*CANVAS_PXMM, 1.4*CANVAS_PXMM);
+    function readIdGroup(items, groupLabel){
+      const reads = items.map(pt => {
+        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, READ_RADIUS_MM*CANVAS_PXMM);
+        const delta = tasterCalibLum - l;
+        const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
+        debugRows.push({ block:"—", attr:`Taster ${groupLabel}`, score:pt.label, lum:l.toFixed(1), delta:delta.toFixed(1), state });
+        overlayPoints.push({ x:pt.x, y:pt.y, state });
+        return { id:pt.label, state };
+      });
+      const filled = reads.filter(r => r.state === "filled");
+      const unsure = reads.filter(r => r.state === "unsure");
+      if (filled.length === 1 && unsure.length === 0) return { value: filled[0].id, review:false };
+      return { value:null, review:true };
+    }
+    const tasterResult = {
+      color: readIdGroup(MAP.taster.color, "Color"),
+      animal: readIdGroup(MAP.taster.animal, "Animal")
+    };
+
+    drawOverlay(overlayPoints);
+    renderTable(blockResults, tasterResult);
+    renderDebug(debugRows, blockCalib);
 
     statusEl.textContent = "Done.";
     byId("resultSection").hidden = false;
     byId("tableSection").hidden = false;
     byId("debugSection").hidden = false;
+
+    // testing hook: lets an automated harness read back exactly what the UI shows
+    window.__lastRun = { blockResults, tasterResult, debugRows, blockCalib, corners, mapUsed: MAP };
   }
 
   function summarizeRow(reads){
@@ -577,27 +704,25 @@
     return { value: null, review: true };
   }
 
-  function drawOverlay(outImgData, calibLum, FILL_DELTA, UNSURE_DELTA){
-    dstCtx.putImageData(outImgData, 0, 0);
-    MAP.blocks.forEach(block => {
-      const all = ATTRS.map(([k]) => block[k]).flat().concat(block.overall);
-      all.forEach(pt => {
-        const l = meanLum(outImgData, pt.x*CANVAS_PXMM, pt.y*CANVAS_PXMM, 1.1*CANVAS_PXMM);
-        const delta = calibLum - l;
-        const state = delta > FILL_DELTA ? "filled" : delta > UNSURE_DELTA ? "unsure" : "empty";
-        const cx = pt.x*CANVAS_PXMM, cy = pt.y*CANVAS_PXMM;
-        dstCtx.beginPath();
-        dstCtx.arc(cx, cy, 2.6*CANVAS_PXMM, 0, Math.PI*2);
-        if (state === "filled"){ dstCtx.fillStyle = "rgba(47,110,63,.55)"; dstCtx.fill(); }
-        else if (state === "unsure"){ dstCtx.strokeStyle = "#8A5A12"; dstCtx.lineWidth = 2; dstCtx.stroke(); }
-        else { dstCtx.strokeStyle = "rgba(120,110,100,.5)"; dstCtx.lineWidth = 1.2; dstCtx.stroke(); }
-      });
+  function drawOverlay(overlayPoints){
+    // outImgData is already painted onto dstCanvas by the caller — this just adds
+    // dots for exactly the reads already computed, so the picture can never
+    // disagree with the results table.
+    overlayPoints.forEach(({ x, y, state }) => {
+      const cx = x*CANVAS_PXMM, cy = y*CANVAS_PXMM;
+      dstCtx.beginPath();
+      dstCtx.arc(cx, cy, 2.6*CANVAS_PXMM, 0, Math.PI*2);
+      if (state === "filled"){ dstCtx.fillStyle = "rgba(47,110,63,.55)"; dstCtx.fill(); }
+      else if (state === "unsure"){ dstCtx.strokeStyle = "#8A5A12"; dstCtx.lineWidth = 2; dstCtx.stroke(); }
+      else { dstCtx.strokeStyle = "rgba(120,110,100,.5)"; dstCtx.lineWidth = 1.2; dstCtx.stroke(); }
     });
   }
 
-  function renderTable(blockResults){
+  function renderTable(blockResults, tasterResult){
     const t = byId("resultsTable");
-    let html = "";
+    let html = `<tr><td colspan="2" class="block-caption">Taster</td></tr>`;
+    html += rowHTMLText("Color", tasterResult.color);
+    html += rowHTMLText("Animal", tasterResult.animal);
     blockResults.forEach(b => {
       html += `<tr><td colspan="2" class="block-caption">Wine ${b.letter}</td></tr>`;
       ATTRS.forEach(([key,label]) => {
@@ -615,8 +740,16 @@
     return `<tr><td>${label}</td><td>${cell}</td></tr>`;
   }
 
-  function renderDebug(rows, calibLum){
-    byId("calibLine").textContent = `Blank-paper baseline luminance: ${calibLum.toFixed(1)} / 255 (lower = darker). Filled = baseline − reading > 45, unsure = 20–45, empty ≤ 20 — placeholder thresholds, tune once you have real photos.`;
+  function rowHTMLText(label, r){
+    const cell = r.review
+      ? `<span class="chip review">needs review</span>`
+      : `<span class="chip ok">${r.value}</span>`;
+    return `<tr><td>${label}</td><td>${cell}</td></tr>`;
+  }
+
+  function renderDebug(rows, blockCalib){
+    const calibList = blockCalib.map((v,i) => `${"ABCD"[i]}: ${v.toFixed(1)}`).join("  ·  ");
+    byId("calibLine").textContent = `Per-block blank-paper baseline (0–255, lower = darker) — ${calibList}. Filled = baseline − reading > 45, unsure = 20–45, empty ≤ 20 — placeholder thresholds, tune once you have real photos.`;
     const t = byId("debugTable");
     let html = "<tr><th>Wine</th><th>Attr</th><th>Score</th><th>Lum</th><th>Δ</th><th>State</th></tr>";
     rows.forEach(r => {
@@ -624,6 +757,9 @@
     });
     t.innerHTML = html;
   }
+
+  // testing hook: lets an automated harness override the auto-detected corners
+  window.__setCorners = (c) => { corners = c; layoutHandles(); };
 
   buildMap();
 })();

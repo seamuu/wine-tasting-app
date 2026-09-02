@@ -22,7 +22,14 @@ One **A5 "flight card"** per taster per event, covering the whole flight
 
 Fields, top to bottom:
 
-1. **Header** — event name, date, taster name (all handwritten).
+1. **Header** — event name, date, taster name (handwritten, for the
+   organizer's own reference only — not what the pipeline reads), plus a
+   **taster ID**: two small bubble rows, *Color* (Red/Orange/Yellow/Green/
+   Blue) and *Animal* (Fox/Owl/Bear/Wolf), giving 20 unique combinations
+   (e.g. "Blue Owl"). This is the identity the scan pipeline actually reads
+   — deterministic bubbles, not handwriting, same reasoning as the A–D wine
+   letters below. It also keeps tasters blind to each other's scores during
+   the event, the same way blind-labelling the wines does.
 2. **Four wine blocks** (labeled A–D so tasting can stay blind), each with:
    - Body — 5 bubbles, *Light → Full*
    - Acidity — 5 bubbles, *Soft → Acidic*
@@ -75,11 +82,17 @@ do the job.
 
 - `Event` — name, date, flight (ordered list of wines)
 - `Wine` — name, producer, vintage, flight position (A/B/C/D)
-- `Card` — one per taster per event: taster name, card-layout version, raw
-  photo reference, scan status (`pending` / `needs review` / `confirmed`)
+- `Card` — one per taster per event: taster color+animal ID (what the
+  pipeline reads), taster name (handwritten on the card, confirmed/corrected
+  by the organizer during scan review — the same "confirm or correct" step
+  already in the pipeline, just also resolving identity, not only ratings),
+  card-layout version, raw photo reference, scan status (`pending` /
+  `needs review` / `confirmed`)
 - `Rating` — one per (card, wine): body, acidity, tannin, sweetness (1–5
   each), overall (1–10), one-word descriptor, per-field confidence score
-- `Dashboard` — computed, not stored: aggregates `Rating` rows per `Event`
+- `Dashboard` — computed, not stored: aggregates `Rating` rows per `Event`,
+  displaying each card's confirmed taster name and each wine's real name
+  (from `Wine.flight_position`) instead of the blind color+animal/letter IDs
 
 ## Shared Dashboard
 
@@ -108,12 +121,15 @@ historical trends across events.
 
 1. **Multi-group scope** — confirmed: one shared group at a time, no
    account/invite system for MVP.
-2. **Stack** — **Next.js + Supabase (Postgres + storage) + Vercel.** Chosen
-   for fast build speed and low ops overhead now, while staying on a
-   conventional, well-supported path if this turns into a product later:
-   Supabase's auth/multi-tenancy (row-level security, orgs) covers the
-   later step to multiple concurrent groups/accounts without a rewrite,
-   and Vercel/Next.js scale without infra work up front.
+2. **Stack** — **Next.js + Render (web service + Postgres).** Originally
+   proposed Vercel + Supabase; switched to consolidate on Render since
+   there's already another project hosted there and it avoids juggling a
+   separate database provider — Render's own Postgres covers what Supabase
+   would have, minus built-in auth/storage, neither of which the MVP needs
+   (no login, and `Card.raw_photo` can live on a Render disk or be
+   revisited once real usage clarifies the need). Note: Render's free
+   Postgres tier auto-deletes after 30 days — a paid tier (~$7/mo) is
+   needed before this holds real event data long-term.
 3. **Card capacity** — confirmed: 4 wines/side for v1.
 4. **Physical cards after scanning** — doesn't need a policy call for the
    app itself: the organizer can toss or keep the paper, that's a personal

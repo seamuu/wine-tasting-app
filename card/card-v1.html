@@ -173,12 +173,10 @@
   }
   .fields{
     display:grid;
-    grid-template-columns:1fr 1fr;
-    column-gap:6mm;
-    row-gap:2mm;
+    grid-template-columns:1fr 1fr 1fr;
+    column-gap:5mm;
   }
   .field{ grid-column:span 1; }
-  .field.wide{ grid-column:1 / -1; }
   .field-label{
     font-family:"IBM Plex Mono", monospace;
     font-size:2.3mm;
@@ -192,6 +190,37 @@
   .field-rule{
     border-bottom:.3mm solid var(--ink);
     height:3.2mm;
+  }
+
+  .id-row{
+    display:flex;
+    align-items:flex-end;
+    gap:4mm;
+    margin-top:2mm;
+  }
+  .id-lead{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:2.1mm;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--ink);
+    white-space:nowrap;
+    padding-bottom:.5mm;
+  }
+  .id-group{ display:flex; gap:2.6mm; }
+  .id-group + .id-group{ padding-left:2.6mm; border-left:.25mm solid #C9C2BA; }
+  .id-item{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:.5mm;
+  }
+  .id-item .bubble{ width:3mm; height:3mm; }
+  .id-item span{
+    font-family:"IBM Plex Mono", monospace;
+    font-size:1.7mm;
+    line-height:1.8mm;
+    color:#5B534B;
   }
 
   .blocks{
@@ -370,9 +399,25 @@
               <span class="field-label">Date</span>
               <div class="field-rule"></div>
             </div>
-            <div class="field wide">
-              <span class="field-label">Taster</span>
+            <div class="field">
+              <span class="field-label">Name</span>
               <div class="field-rule"></div>
+            </div>
+          </div>
+          <div class="id-row">
+            <span class="id-lead">You are</span>
+            <div class="id-group">
+              <div class="id-item"><span class="bubble"></span><span>Red</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Orange</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Yellow</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Green</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Blue</span></div>
+            </div>
+            <div class="id-group">
+              <div class="id-item"><span class="bubble"></span><span>Fox</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Owl</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Bear</span></div>
+              <div class="id-item"><span class="bubble"></span><span>Wolf</span></div>
             </div>
           </div>
         </div>
