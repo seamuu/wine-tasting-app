@@ -45,3 +45,7 @@ next-env.d.ts
 card/test-photos/
 
 /app/generated/prisma
+card/scan-captures/
+
+# generated print output — rebuild from public/card-v2.html
+wine-cards-A4-2up.pdf

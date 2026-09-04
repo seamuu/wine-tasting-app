@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wine Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --backdrop:#F1ECE6; --chrome-ink:#241C18; --chrome-muted:#7A6F65;
+    --chrome-line:#DCD3C8; --accent:#7A1228; --accent-soft:#F3E1E4;
+    --surface:#FFFFFF; --paper:#FFFFFF; --ink:#17110F;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --backdrop:#171310; --chrome-ink:#EDE6DF; --chrome-muted:#9C9086;
+      --chrome-line:#38312B; --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
+    }
+  }
+  :root[data-theme="dark"]{
+    --backdrop:#171310; --chrome-ink:#EDE6DF; --chrome-muted:#9C9086;
+    --chrome-line:#38312B; --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
+  }
+
+  *{ box-sizing:border-box; }
+  /* Mobile browsers "boost" text in wide containers, which changes every text
+     block's height. The card is measured in mm and read back by the scanner,
+     so its layout must be identical on every device. */
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--backdrop); color:var(--chrome-ink);
+    font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{ max-width:1040px; margin:0 auto; padding:2.75rem 1.5rem 4rem; display:flex; flex-direction:column; align-items:center; gap:2rem; }
+  .chrome-head{ width:100%; max-width:560px; display:flex; flex-direction:column; gap:.5rem; text-align:center; }
+  .chrome-kicker{ font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); }
+  .chrome-title{ font-family:"Fraunces", Georgia, serif; font-weight:600; font-size:2rem; letter-spacing:-.01em; text-wrap:balance; margin:0; }
+  .chrome-sub{ font-size:.92rem; color:var(--chrome-muted); line-height:1.5; text-wrap:balance; }
+  .toolbar{ display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; justify-content:center; }
+  .btn{ font-family:"IBM Plex Sans", sans-serif; font-size:.85rem; font-weight:600; border-radius:5px; padding:.6rem 1.1rem; border:1px solid transparent; cursor:pointer; }
+  .btn-primary{ background:var(--accent); color:var(--accent-soft); }
+  .btn-ghost{ background:transparent; border-color:var(--chrome-line); color:var(--chrome-ink); }
+
+  .sheets{ display:flex; flex-wrap:wrap; gap:1.5rem; justify-content:center; }
+  .sheet-shell{ background:var(--surface); padding:1.25rem; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,.06), 0 18px 40px -20px rgba(0,0,0,.35); }
+  .sheet-caption{ text-align:center; font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase; color:var(--chrome-muted); margin-bottom:.5rem; }
+
+  .sheet{
+    width:148mm; height:210mm; background:var(--paper); color:var(--ink);
+    position:relative; font-family:"IBM Plex Sans", sans-serif; padding:9mm 10mm;
+    display:flex; flex-direction:column;
+  }
+  .reg{ position:absolute; width:6mm; height:6mm; background:var(--ink); }
+  .reg-tl{ top:5mm; left:5mm; } .reg-tr{ top:5mm; right:5mm; }
+  .reg-bl{ bottom:5mm; left:5mm; } .reg-br{ bottom:5mm; right:5mm; }
+
+  /* padding-right keeps the title clear of the top-right registration square
+     (which occupies 137-142mm) while the rule below still spans the full
+     content width, so it stays aligned with the block rules underneath. */
+  .head{ display:flex; align-items:baseline; justify-content:space-between; padding-bottom:1.6mm; padding-right:4mm; border-bottom:.5mm solid var(--ink); margin-bottom:3mm; }
+  .head-kicker{ font-family:"IBM Plex Mono", monospace; font-size:2.3mm; letter-spacing:.1em; text-transform:uppercase; color:var(--chrome-muted); }
+  .head-title{ font-family:"Fraunces", serif; font-weight:600; font-size:5.4mm; letter-spacing:-.01em; }
+
+  .block{ margin-top:1.6mm; }
+  .block:first-of-type{ margin-top:0; }
+  .block-header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom:.3mm solid var(--ink); padding-bottom:.7mm; margin-bottom:1.5mm;
+  }
+  .block-header .name{ font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:2.9mm; letter-spacing:.06em; text-transform:uppercase; }
+  .block-header .tag{ font-family:"IBM Plex Mono", monospace; font-size:2.1mm; letter-spacing:.04em; text-transform:uppercase; color:var(--chrome-muted); }
+
+  .id-row{ display:flex; align-items:flex-end; gap:4mm; margin-bottom:1.8mm; }
+  .id-row:last-child{ margin-bottom:0; }
+  .id-lead{ font-family:"IBM Plex Mono", monospace; font-size:2.1mm; letter-spacing:.06em; text-transform:uppercase; color:var(--chrome-muted); white-space:nowrap; padding-bottom:.5mm; }
+  .id-group{ display:flex; gap:2.8mm; }
+  .id-group + .id-group{ padding-left:2.8mm; border-left:.25mm solid #C9C2BA; }
+  .id-item{ display:flex; flex-direction:column; align-items:center; gap:.5mm; }
+  .id-item .bubble{ width:3.4mm; height:3.4mm; }
+  .id-item span{ font-family:"IBM Plex Mono", monospace; font-size:1.8mm; line-height:1.9mm; color:#5B534B; }
+
+  .side-banner{
+    display:flex; align-items:center; justify-content:space-between;
+    border:.4mm solid var(--ink); border-radius:1.5mm; padding:1.2mm 4mm; margin-top:1.4mm;
+  }
+  .side-banner .label{ font-family:"Fraunces", serif; font-weight:700; font-size:4mm; }
+  /* Machine-readable side code: squares, not bubbles, so it never reads as fillable.
+     Exactly one is solid. Two marks means the scanner can tell "the other side"
+     apart from "I failed to read it". */
+  .side-lead{ display:flex; align-items:center; gap:2.8mm; }
+  .side-code{ display:flex; gap:1.2mm; }
+  .side-code i{ display:block; width:3mm; height:3mm; border:.35mm solid var(--ink); background:transparent; }
+  .side-code i.on{ background:var(--ink); }
+  .side-banner .hint{ font-family:"IBM Plex Mono", monospace; font-size:1.8mm; color:#5B534B; text-align:right; max-width:38mm; line-height:1.35; }
+
+  /* twelve buckets across 128mm of usable width, so each column is ~9.5mm -
+     the labels set the type size, not the other way round */
+  .price-row{ display:flex; gap:1.1mm; }
+  .price-item{ display:flex; flex-direction:column; align-items:center; gap:.6mm; flex:1; min-width:0; }
+  .price-item .bubble{ width:3.4mm; height:3.4mm; }
+  .price-item span{ font-family:"IBM Plex Mono", monospace; font-size:1.85mm; color:var(--ink); white-space:nowrap; }
+
+  .rowgrid{ display:grid; grid-template-columns:16mm 9mm 1fr 9mm; align-items:center; column-gap:2mm; height:3.8mm; }
+  .attr-label{ font-size:2.9mm; font-weight:500; }
+  .scale-end{ font-family:"IBM Plex Mono", monospace; font-size:2mm; color:#5B534B; }
+  .scale-end.right{ text-align:right; }
+  .bubbles{ display:flex; justify-content:space-between; align-items:center; }
+  .bubble{ width:3.6mm; height:3.6mm; border-radius:50%; border:.4mm solid var(--ink); background:transparent; }
+
+  .flavor-grid{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.2mm; }
+  .tier-divider{ display:flex; align-items:center; gap:2mm; margin:1.3mm 0 .9mm; }
+  .tier-divider:first-child{ margin-top:0; }
+  .tier-divider span{
+    font-family:"IBM Plex Mono", monospace; font-size:1.8mm; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--accent); white-space:nowrap;
+  }
+  .tier-divider::after{ content:""; flex:1; height:.25mm; background:var(--chrome-line); }
+  .flavor-box{
+    border:.3mm solid var(--chrome-line); border-radius:1.2mm;
+    padding:.8mm 1.3mm; display:flex; flex-direction:column; gap:.45mm;
+  }
+  .fb-label{ font-size:2.15mm; font-weight:600; white-space:nowrap; }
+  .fb-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:.6mm; }
+  .fb-item{ display:flex; flex-direction:column; align-items:center; gap:.4mm; flex:1; }
+  .fb-item .bubble{ width:2.7mm; height:2.7mm; flex-shrink:0; }
+  .fb-item span{ font-family:"IBM Plex Mono", monospace; font-size:1.5mm; line-height:1.65mm; color:#5B534B; text-align:center; white-space:nowrap; }
+
+  .overall{
+    margin-top:2mm; padding:1.8mm 4mm; border:.4mm solid var(--ink); border-radius:1.5mm;
+    display:grid; grid-template-columns:18mm 1fr; align-items:center; column-gap:3mm;
+  }
+  .overall-label{ font-size:3.6mm; font-weight:600; }
+  .overall-bubbles{ display:flex; flex-direction:column; gap:.9mm; }
+  .overall-row{ display:flex; justify-content:space-between; }
+  .overall-row .bubble{ width:4.2mm; height:4.2mm; }
+  .overall-ticks{ display:flex; justify-content:space-between; }
+  .overall-ticks span{ font-family:"IBM Plex Mono", monospace; font-size:1.9mm; color:#5B534B; width:4.2mm; text-align:center; }
+
+  .legend{ max-width:560px; text-align:center; font-size:.82rem; line-height:1.6; color:var(--chrome-muted); }
+  .legend b{ color:var(--chrome-ink); font-weight:600; }
+
+  /* ---- A4 two-up imposition ----------------------------------------
+     Two A5 cards side by side on A4 landscape (297x210). Two cards at full
+     size are 296mm wide with no room for a printer's unprintable margin, and
+     the corner registration marks sit only 5mm inside each card - so the pair
+     is scaled to 95%, putting every mark at least 10mm from the paper edge.
+     Scaling is harmless to the scanner, which normalises via the four marks.
+     Both cards on a face are identical, so it does not matter which way the
+     duplex flip lands them: every physical card still gets white on one side
+     and red on the other. */
+  #a4-pages{ display:none; }
+  .a4-page{ width:297mm; height:210mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#fff; }
+  .a4-page + .a4-page{ page-break-before:always; }
+  .a4-inner{ display:flex; align-items:stretch; transform:scale(0.95); transform-origin:center center; }
+  .a4-cut{ width:4mm; position:relative; background:#fff; flex:none; }
+  .a4-cut::before{ content:""; position:absolute; left:50%; top:0; bottom:0; border-left:.2mm dashed #B9B0A6; }
+
+  @media print{
+    body{ background:#FFFFFF; }
+    .chrome-head, .toolbar, .legend, .sheet-caption{ display:none; }
+    .page{ padding:0; gap:0; max-width:none; }
+    .sheets{ gap:0; }
+    .sheet-shell{ padding:0; border-radius:0; box-shadow:none; }
+    .sheet{ box-shadow:none; page-break-after:always; }
+
+    body.mode-a4 .page{ display:none !important; }
+    body.mode-a4 #a4-pages{ display:block !important; }
+    body.mode-a4 .a4-page .sheet{ page-break-after:auto; }
+  }
+</style>
+<style id="pagerule">@page{ size:A5; margin:0; }</style>
+</head>
+<body>
+  <div class="page">
+    <div class="chrome-head">
+      <div class="chrome-kicker">Card v2 · Printable A5 · One wine at a time</div>
+      <h1 class="chrome-title">Wine Card</h1>
+      <p class="chrome-sub">
+        Print double-sided — front for white wines, back for red. A fresh
+        card per wine, per taster. Corner squares are scan registration marks.
+      </p>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn btn-primary" onclick="printAs('a4')">Print A4 — 2 per page</button>
+      <button class="btn btn-ghost" onclick="printAs('a5')">Print A5 — 1 per page</button>
+      <label class="btn btn-ghost" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <span style="font-weight:400;color:var(--chrome-muted);font-size:.78rem;">Taster names</span>
+        <select id="idset" style="font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
+      </label>
+      <span class="btn btn-ghost" style="cursor:default;">Structure — 1–5 · Rating — 1–10</span>
+    </div>
+
+    <div class="sheets">
+      <div>
+        <div class="sheet-caption">Front — white wine</div>
+        <div class="sheet-shell">
+          <div class="sheet" id="sheet-white"></div>
+        </div>
+      </div>
+      <div>
+        <div class="sheet-caption">Back — red wine</div>
+        <div class="sheet-shell">
+          <div class="sheet" id="sheet-red"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="legend">
+      <b>card-v2</b> · A5 (148 × 210 mm), double-sided · one wine per card ·
+      Structure (body/acidity/tannin/alcohol) scored 1–5, Overall scored 1–10 ·
+      price guess and flavor notes are the scored quiz fields · corner
+      squares are scan registration marks, not decoration.
+    </p>
+  </div>
+
+  <div id="a4-pages" aria-hidden="true">
+    <div class="a4-page"><div class="a4-inner">
+      <div class="sheet" id="a4-w1"></div><div class="a4-cut"></div><div class="sheet" id="a4-w2"></div>
+    </div></div>
+    <div class="a4-page"><div class="a4-inner">
+      <div class="sheet" id="a4-r1"></div><div class="a4-cut"></div><div class="sheet" id="a4-r2"></div>
+    </div></div>
+  </div>
+
+<script>
+  // Front and back are identical except the side banner — built once here so
+  // the two sheets can never drift apart the way hand-duplicated markup did.
+  function flavorBox(label, words){
+    const items = words.map(w => `
+      <div class="fb-item">
+        <span class="bubble"></span>
+        <span>${w}</span>
+      </div>`).join("");
+    return `
+      <div class="flavor-box">
+        <span class="fb-label">${label}</span>
+        <div class="fb-row">${items}</div>
+      </div>`;
+  }
+  // Tier is signalled by its own labelled section rather than a tag on every box.
+  function flavorSection(title, boxes){
+    return `
+      <div class="tier-divider"><span>${title}</span></div>
+      <div class="flavor-grid">${boxes.join("")}</div>`;
+  }
+  function flavorGroupCol(boxesHTML){
+    return `<div class="flavor-group-col">${boxesHTML.join("")}</div>`;
+  }
+
+  // Taster IDs are two independent picks - 5 x 4 gives 20 people without anyone
+  // needing to write their name. Swapping the vocabulary changes nothing else,
+  // and the scanner reads its map from this DOM, so it follows automatically.
+  const ID_SETS = {
+    house:   { label:"Skinny / Twink", a:["Skinny","Hot","Ugly","Annoying","Hairy"],
+                                       b:["Twink","Bear","Dyke","Mommy"] },
+    colours: { label:"Colours + animals", a:["Red","Orange","Yellow","Green","Blue"],
+                                          b:["Fox","Owl","Bear","Wolf"] },
+    vibes:   { label:"Vibes", a:["Chaotic","Smug","Feral","Serene","Messy"],
+                              b:["Icon","Legend","Menace","Angel"] },
+    plants:  { label:"Plants", a:["Cactus","Fern","Ivy","Moss","Thistle"],
+                               b:["Root","Leaf","Bud","Thorn"] },
+  };
+  const params = new URLSearchParams(location.search);
+  let idSet = ID_SETS[params.get("ids")] ? params.get("ids") : "house";
+
+  function sheetHTML(side){
+    const isWhite = side === "white";
+    const ids = ID_SETS[idSet];
+    return `
+      <div class="reg reg-tl"></div><div class="reg reg-tr"></div>
+      <div class="reg reg-bl"></div><div class="reg reg-br"></div>
+
+      <div class="head">
+        <span class="head-kicker">card-v2</span>
+        <span class="head-title">Wine Card</span>
+      </div>
+
+      <div class="block">
+        <div class="block-header"><span class="name">Info</span><span class="tag">scanned</span></div>
+        <div class="id-row">
+          <span class="id-lead">You are</span>
+          <div class="id-group">${ids.a.map(c=>`<div class="id-item"><span class="bubble"></span><span>${c}</span></div>`).join("")}</div>
+          <div class="id-group">${ids.b.map(c=>`<div class="id-item"><span class="bubble"></span><span>${c}</span></div>`).join("")}</div>
+        </div>
+        <div class="id-row">
+          <span class="id-lead">Wine</span>
+          <div class="id-group">${["A","B","C","D"].map(c=>`<div class="id-item"><span class="bubble"></span><span>${c}</span></div>`).join("")}</div>
+        </div>
+        <div class="side-banner">
+          <div class="side-lead">
+            <span class="side-code" aria-hidden="true">
+              <i class="${isWhite ? "on" : ""}"></i><i class="${isWhite ? "" : "on"}"></i>
+            </span>
+            <span class="label">${isWhite ? "White wine" : "Red wine"}</span>
+          </div>
+          <span class="hint">${isWhite ? "Pouring looks white/gold? Use this side." : "Pouring looks red/pink? Use this side."}</span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-header"><span class="name">Price</span><span class="tag">your guess · NOK</span></div>
+        <div class="price-row">
+          ${bubbleItemsVertical(["<150","150–169","170–189","190–209","210–229","230–249",
+                                 "250–269","270–289","290–309","310–329","330–349","350+"])}
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="block-header"><span class="name">Structure</span><span class="tag">score 1–5</span></div>
+        ${rowgrid("Body","Light","Full")}
+        ${rowgrid("Acidity","Soft","Zingy")}
+        ${rowgrid("Tannin","Smooth","Grippy")}
+        ${rowgrid("Sweetness","Dry","Sweet")}
+        ${rowgrid("Alcohol","Low","High")}
+      </div>
+
+      <div class="block">
+        <div class="block-header"><span class="name">Aroma &amp; flavor</span><span class="tag">mark any that apply</span></div>
+        ${isWhite ? `
+        ${flavorSection("Primary — from the grape", [
+          flavorBox("Citrus fruit", ["Lemon","Lime","Grapefruit","Orange","Bergamot"]),
+          flavorBox("Orchard fruit", ["Apple","Pear","Peach","Apricot","Quince"]),
+          flavorBox("Tropical fruit", ["Pineapple","Mango","Melon","Lychee","Passion"]),
+          flavorBox("Floral", ["Blossom","Elderflower","Honeysuckle","Jasmine","Acacia"]),
+          flavorBox("Herbal", ["Grass","Mint","Dill","Fennel","Thyme"]),
+          flavorBox("Vegetal", ["Capsicum","Asparagus","Nettle","Pea","Celery"]),
+          flavorBox("Spice", ["Pepper","Liquorice","Anise","Coriander","Cardamom"]),
+          flavorBox("Mineral", ["Stone","Chalk","Flint","Slate","Gravel"]),
+          flavorBox("Saline", ["Salt","Iodine","Brine","Oyster","Seaweed"]),
+          flavorBox("Dried fruit", ["Raisin","Sultana","Fig","Date","Candied"]),
+          flavorBox("Ripeness", ["Ripe","Unripe","Cooked","Stewed","Baked"]),
+          flavorBox("Other", ["Candy","Bubblegum","Wax","Sherbet","Cordial"]),
+        ])}
+        ${flavorSection("Secondary — winemaking", [
+          flavorBox("Oak", ["Vanilla","Toast","Smoke","Cedar","Coconut"]),
+          flavorBox("Yeast / lees", ["Biscuit","Bread","Brioche","Pastry","Dough"]),
+          flavorBox("Malolactic", ["Butter","Cream","Yogurt","Cheese","Milk"]),
+        ])}
+        ${flavorSection("Tertiary — aging", [
+          flavorBox("Nutty", ["Almond","Hazelnut","Walnut","Marzipan","Nougat"]),
+          flavorBox("Honeyed", ["Honey","Marmalade","Beeswax","Toffee","Saffron"]),
+          flavorBox("Aged", ["Petrol","Caramel","Cinnamon","Nutmeg","Ginger"]),
+        ])}
+        ` : `
+        ${flavorSection("Primary — from the grape", [
+          flavorBox("Red fruit", ["Cherry","Raspberry","Strawberry","Cranberry","Redcurrant"]),
+          flavorBox("Black fruit", ["Blackberry","Blackcurrant","Plum","Blueberry","Mulberry"]),
+          flavorBox("Dried fruit", ["Raisin","Prune","Fig","Date","Fruitcake"]),
+          flavorBox("Floral", ["Violet","Rose","Lavender","Lilac","Potpourri"]),
+          flavorBox("Herbal", ["Mint","Eucalyptus","Sage","Thyme","Bay"]),
+          flavorBox("Vegetal", ["Capsicum","Tomato","Olive","Beetroot","Fennel"]),
+          flavorBox("Spice", ["Pepper","Liquorice","Anise","Juniper","Chilli"]),
+          flavorBox("Earth", ["Soil","Dust","Clay","Ash","Moss"]),
+          flavorBox("Mineral", ["Graphite","Iron","Slate","Gravel","Blood"]),
+          flavorBox("Pungent", ["Tar","Menthol","Camphor","Resin","Pine"]),
+          flavorBox("Ripeness", ["Ripe","Unripe","Jammy","Stewed","Baked"]),
+          flavorBox("Other", ["Candy","Bubblegum","Cola","Balsamic","Kirsch"]),
+        ])}
+        ${flavorSection("Secondary — winemaking", [
+          flavorBox("Oak", ["Vanilla","Toast","Cedar","Smoke","Coconut"]),
+          flavorBox("Chocolate", ["Cocoa","Coffee","Mocha","Toffee","Butterscotch"]),
+          flavorBox("Malolactic", ["Butter","Cream","Yogurt","Cheese","Milk"]),
+        ])}
+        ${flavorSection("Tertiary — aging", [
+          flavorBox("Aged", ["Leather","Tobacco","Cigar","Tea","Caramel"]),
+          flavorBox("Savoury", ["Game","Bacon","Soy","Broth","Umami"]),
+          flavorBox("Forest floor", ["Mushroom","Truffle","Leaves","Undergrowth","Compost"]),
+        ])}
+        `}
+      </div>
+
+      <div class="overall">
+        <span class="overall-label">Rating</span>
+        <div class="overall-bubbles">
+          <div class="overall-row">${Array.from({length:10},()=>'<span class="bubble"></span>').join("")}</div>
+          <div class="overall-ticks">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<span>${n}</span>`).join("")}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function rowgrid(label, lo, hi){
+    return `<div class="rowgrid">
+      <span class="attr-label">${label}</span><span class="scale-end">${lo}</span>
+      <div class="bubbles">${Array.from({length:5},()=>'<span class="bubble"></span>').join("")}</div>
+      <span class="scale-end right">${hi}</span>
+    </div>`;
+  }
+  function bubbleItemsVertical(words){
+    return words.map(w => `<div class="price-item"><span class="bubble"></span><span>${w}</span></div>`).join("");
+  }
+
+  // Same generator feeds the imposed pages, so the two-up sheets can never
+  // drift from the single-card ones.
+  function renderAll(){
+    document.getElementById("sheet-white").innerHTML = sheetHTML("white");
+    document.getElementById("sheet-red").innerHTML = sheetHTML("red");
+    ["a4-w1","a4-w2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML("white"));
+    ["a4-r1","a4-r2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML("red"));
+  }
+  renderAll();
+
+  const idPicker = document.getElementById("idset");
+  idPicker.innerHTML = Object.entries(ID_SETS)
+    .map(([k,v]) => `<option value="${k}"${k===idSet?" selected":""}>${v.label}</option>`).join("");
+  idPicker.addEventListener("change", e => {
+    idSet = e.target.value;
+    const u = new URL(location.href);
+    u.searchParams.set("ids", idSet);
+    history.replaceState(null, "", u);      // so the print/PDF keeps the choice
+    renderAll();
+  });
+
+  // @page size cannot be toggled by a class, so the rule itself is rewritten.
+  function printAs(mode){
+    const a4 = mode === "a4";
+    document.getElementById("pagerule").textContent =
+      a4 ? "@page{ size:A4 landscape; margin:0; }" : "@page{ size:A5; margin:0; }";
+    document.body.classList.toggle("mode-a4", a4);
+    window.print();
+  }
+  window.printAs = printAs;
+
+  // ?print=a4 renders the imposed layout directly — used to export the PDF.
+  const wanted = new URLSearchParams(location.search).get("print");
+  if (wanted === "a4" || wanted === "a5"){
+    const a4 = wanted === "a4";
+    document.getElementById("pagerule").textContent =
+      a4 ? "@page{ size:A4 landscape; margin:0; }" : "@page{ size:A5; margin:0; }";
+    document.body.classList.toggle("mode-a4", a4);
+  }
+</script>
+</body>
+</html>
