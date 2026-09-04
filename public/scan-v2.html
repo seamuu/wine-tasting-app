@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scan · card-v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --backdrop:#F1ECE6; --ink:#17110F; --muted:#7A6F65; --line:#DCD3C8;
+    --accent:#7A1228; --accent-soft:#F3E1E4; --surface:#FFFFFF;
+    --ok:#1C6B5B; --warn:#A8620E;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --backdrop:#171310; --ink:#EDE6DF; --muted:#9C9086; --line:#38312B;
+      --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
+      --ok:#6FC5AF; --warn:#E0A45C;
+    }
+  }
+  :root[data-theme="dark"]{
+    --backdrop:#171310; --ink:#EDE6DF; --muted:#9C9086; --line:#38312B;
+    --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
+    --ok:#6FC5AF; --warn:#E0A45C;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--backdrop); color:var(--ink);
+        font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; }
+  .wrap{ max-width:1100px; margin:0 auto; padding:1.5rem 1rem 4rem; display:flex; flex-direction:column; gap:1.25rem; }
+  h1{ font-family:"Fraunces", Georgia, serif; font-size:1.6rem; margin:0; }
+  .kicker{ font-family:"IBM Plex Mono", monospace; font-size:.68rem; letter-spacing:.14em;
+           text-transform:uppercase; color:var(--accent); }
+  .sub{ color:var(--muted); font-size:.9rem; line-height:1.5; margin:0; }
+
+  .bar{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;
+        padding-bottom:1rem; border-bottom:1px solid var(--line); }
+  .btn{ font:inherit; font-size:.85rem; font-weight:600; border-radius:5px;
+        padding:.6rem 1rem; border:1px solid var(--line); background:var(--surface);
+        color:var(--ink); cursor:pointer; }
+  .btn-primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-soft); }
+  .btn:disabled{ opacity:.45; cursor:default; }
+  #status{ font-size:.82rem; color:var(--muted); }
+
+  .stage{ position:relative; display:none; background:#000; border-radius:6px; overflow:hidden; }
+  .stage.on{ display:block; }
+  #srcCanvas{ display:block; width:100%; height:auto; }
+  .handle{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px;
+           border:2px solid #24D17E; border-radius:50%; background:rgba(36,209,126,.22);
+           cursor:grab; touch-action:none; }
+
+  .cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:1.5rem; align-items:start; }
+  @media (max-width:820px){ .cols{ grid-template-columns:1fr; } }
+  #dstCanvas{ width:100%; height:auto; border:1px solid var(--line); border-radius:4px; background:#fff; }
+
+  .key{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center; font-size:.78rem;
+        color:var(--muted); margin:.6rem 0 0; }
+  .key i{ display:inline-block; width:.7rem; height:.7rem; border-radius:50%; margin-right:.35rem; vertical-align:-1px; }
+  .key .note{ flex-basis:100%; line-height:1.45; }
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:1rem 1.1rem; }
+  .hdr{ display:flex; align-items:baseline; justify-content:space-between; gap:1rem;
+        border-bottom:1px solid var(--line); padding-bottom:.5rem; margin-bottom:.75rem; }
+  .hdr .t{ font-family:"IBM Plex Mono", monospace; font-size:.7rem; letter-spacing:.12em;
+           text-transform:uppercase; color:var(--muted); }
+  .big{ font-family:"Fraunces", serif; font-size:1.15rem; }
+  .row{ display:grid; grid-template-columns:8.5rem 1fr; gap:.6rem; padding:.28rem 0; font-size:.88rem; align-items:baseline; }
+  .row .k{ font-family:"IBM Plex Mono", monospace; font-size:.72rem; letter-spacing:.06em;
+           text-transform:uppercase; color:var(--muted); }
+  .row .v{ font-weight:500; }
+  .chip{ display:inline-block; font-size:.78rem; padding:.16rem .5rem; border-radius:999px;
+         border:1px solid var(--line); margin:.12rem .2rem .12rem 0; }
+  .chip.hit{ border-color:var(--ok); color:var(--ok); }
+  .flag{ color:var(--warn); font-size:.78rem; }
+  details{ margin-top:.5rem; }
+  summary{ cursor:pointer; font-size:.8rem; color:var(--muted); }
+  table{ width:100%; border-collapse:collapse; font-size:.75rem; margin-top:.5rem; }
+  td,th{ text-align:left; padding:.18rem .4rem .18rem 0; border-bottom:1px solid var(--line); }
+  th{ font-family:"IBM Plex Mono", monospace; font-size:.65rem; text-transform:uppercase; color:var(--muted); font-weight:400; }
+  td.n{ text-align:right; font-family:"IBM Plex Mono", monospace; }
+  iframe#ref{ position:absolute; left:-10000px; top:0; width:900px; height:1300px; border:0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <div class="kicker">card-v2 · scanner</div>
+    <h1>Read a card</h1>
+    <p class="sub">
+      Photograph a filled-in card head-on. The four corner squares are found automatically;
+      drag the green handles if any of them lands wrong. The bubble map is measured from the
+      live card layout, so it can never drift from what was printed.
+    </p>
+  </div>
+
+  <div class="bar">
+    <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
+    <button class="btn btn-primary" onclick="document.getElementById('file').click()">Choose photo</button>
+    <button class="btn" id="readBtn" disabled>Read card</button>
+    <span id="status">Loading card layout…</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="srcCanvas"></canvas>
+    <div class="handle" id="h-tl"></div><div class="handle" id="h-tr"></div>
+    <div class="handle" id="h-bl"></div><div class="handle" id="h-br"></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <canvas id="dstCanvas"></canvas>
+      <p class="key" id="overlayKey" hidden>
+        <span><i style="background:#00B050"></i>marked</span>
+        <span><i style="background:#E8890C"></i>borderline</span>
+        <span><i style="background:#2F86E8"></i>empty</span>
+        <span class="note">Rings show where each bubble is expected — if they sit off the printed circles, drag the corner handles and read again.</span>
+      </p>
+    </div>
+    <div id="results"></div>
+  </div>
+</div>
+
+<!-- The reference card is the scanner's ruler, so it must never be a stale
+     cached copy: a card that has moved since the browser cached it would be
+     measured wrongly and every read would drift. -->
+<iframe id="ref" src="card-v2.html?ruler=2" title="layout reference"></iframe>
+
+<script>
+/* ------------------------------------------------------------------ *
+ * 1. Bubble map, measured from the real card
+ *    The card is the single source of truth: rather than hardcoding 144
+ *    coordinates per side (which would silently rot the moment the layout
+ *    moves), we render card-v2.html in a hidden frame and read the geometry
+ *    and the labels straight out of its DOM.
+ * ------------------------------------------------------------------ */
+const SHEET_W = 148, SHEET_H = 210;      // mm
+const SC = 8;                            // px per mm in the rectified image
+const DST_W = SHEET_W * SC, DST_H = SHEET_H * SC;
+// registration-mark centres: 6mm squares inset 5mm
+const MARK = { tl:{x:8,y:8}, tr:{x:SHEET_W-8,y:8}, bl:{x:8,y:SHEET_H-8}, br:{x:SHEET_W-8,y:SHEET_H-8} };
+
+let MAP = null;
+
+function extractSheet(sheetEl){
+  const S = sheetEl.getBoundingClientRect();
+  const PX = S.width / SHEET_W;                      // px per mm inside the frame
+  const mm = el => { const r = el.getBoundingClientRect();
+    return { x:((r.left+r.right)/2 - S.left)/PX, y:((r.top+r.bottom)/2 - S.top)/PX, d:r.width/PX }; };
+  const textOf = el => el.querySelector("span:last-child").textContent.trim();
+  const groups = [];
+
+  // Each .id-group is its own one-of choice: "You are" holds a colour AND an
+  // animal, so treating the whole row as one group flags a valid card as
+  // double-marked.
+  sheetEl.querySelectorAll(".id-row").forEach(row => {
+    const lead = row.querySelector(".id-lead").textContent.trim();
+    row.querySelectorAll(".id-group").forEach(grp => {
+      groups.push({ kind:"one", name:lead,
+        items:[...grp.querySelectorAll(".id-item")].map(it =>
+          Object.assign({ label:textOf(it) }, mm(it.querySelector(".bubble")))) });
+    });
+  });
+
+  groups.push({ kind:"one", name:"Price",
+    items:[...sheetEl.querySelectorAll(".price-item")].map(it =>
+      Object.assign({ label:textOf(it) }, mm(it.querySelector(".bubble")))) });
+
+  sheetEl.querySelectorAll(".rowgrid").forEach(row => {
+    groups.push({ kind:"one", name:row.querySelector(".attr-label").textContent.trim(), scale:true,
+      items:[...row.querySelectorAll(".bubble")].map((b,i) =>
+        Object.assign({ label:String(i+1) }, mm(b))) });
+  });
+
+  sheetEl.querySelectorAll(".flavor-box").forEach(box => {
+    groups.push({ kind:"many", name:box.querySelector(".fb-label").textContent.trim(),
+      items:[...box.querySelectorAll(".fb-item")].map(it =>
+        Object.assign({ label:textOf(it) }, mm(it.querySelector(".bubble")))) });
+  });
+
+  groups.push({ kind:"one", name:"Rating", scale:true,
+    items:[...sheetEl.querySelectorAll(".overall-row .bubble")].map((b,i) =>
+      Object.assign({ label:String(i+1) }, mm(b))) });
+
+  const code = [...sheetEl.querySelectorAll(".side-code i")].map(mm);
+  return { groups, code };
+}
+
+function buildMap(){
+  const doc = document.getElementById("ref").contentDocument;
+  const w = doc.getElementById("sheet-white"), r = doc.getElementById("sheet-red");
+  if (!w || !r || !w.querySelector(".bubble")) return false;
+  // If the reference card renders distorted (text boosting, an odd zoom, a
+  // layout change), the map is wrong in a way that looks plausible: rows drift
+  // further out the further down the card you go. The Rating box should clear
+  // the bottom registration marks by ~9mm; anything wildly different means the
+  // render cannot be trusted as a ruler.
+  const S = w.getBoundingClientRect(), PX = S.width / SHEET_W;
+  const ov = w.querySelector(".overall").getBoundingClientRect();
+  const bl = w.querySelector(".reg-bl").getBoundingClientRect();
+  const gapMM = (bl.top - ov.bottom) / PX;
+  if (!(gapMM > 4 && gapMM < 16)){
+    window.__layoutGap = gapMM;
+    return false;
+  }
+  MAP = { white: extractSheet(w), red: extractSheet(r) };
+  window.__layoutGap = gapMM;
+  return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * 2. Corner detection (shared with scan-test.html)
+ * ------------------------------------------------------------------ */
+function lum(r,g,b){ return 0.299*r + 0.587*g + 0.114*b; }
+
+function otsuThreshold(hist, total){
+  let sum=0; for (let t=0;t<256;t++) sum += t*hist[t];
+  let sumB=0, wB=0, varMax=0, threshold=127;
+  for (let t=0;t<256;t++){
+    wB += hist[t]; if (!wB) continue;
+    const wF = total - wB; if (!wF) break;
+    sumB += t*hist[t];
+    const mB = sumB/wB, mF = (sum-sumB)/wF;
+    const between = wB*wF*(mB-mF)*(mB-mF);
+    if (between > varMax){ varMax = between; threshold = t; }
+  }
+  return threshold;
+}
+
+function largestBlobAtThreshold(lum8, bw, bh, threshold, x0, y0){
+  const n = bw*bh;
+  const visited = new Uint8Array(n), stack = new Int32Array(n);
+  const minSize = Math.min(bw,bh)*0.06, maxSize = Math.min(bw,bh)*0.6;
+  let best = null;
+  for (let start=0; start<n; start++){
+    if (visited[start] || lum8[start] >= threshold) continue;
+    let sp=0; stack[sp++]=start; visited[start]=1;
+    let area=0,sumX=0,sumY=0,minX=bw,maxX=0,minY=bh,maxY=0;
+    while (sp>0){
+      const cur = stack[--sp];
+      const cy = (cur/bw)|0, cx = cur - cy*bw;
+      area++; sumX+=cx; sumY+=cy;
+      if (cx<minX) minX=cx; if (cx>maxX) maxX=cx;
+      if (cy<minY) minY=cy; if (cy>maxY) maxY=cy;
+      if (cx>0){ const nb=cur-1; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+      if (cx<bw-1){ const nb=cur+1; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+      if (cy>0){ const nb=cur-bw; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+      if (cy<bh-1){ const nb=cur+bw; if (!visited[nb] && lum8[nb]<threshold){ visited[nb]=1; stack[sp++]=nb; } }
+    }
+    const bboxW = maxX-minX+1, bboxH = maxY-minY+1;
+    if (bboxW<minSize || bboxH<minSize || bboxW>maxSize || bboxH>maxSize) continue;
+    const fillRatio = area/(bboxW*bboxH), aspect = bboxW/bboxH;
+    if (fillRatio < 0.55 || aspect < 0.55 || aspect > 1.8) continue;
+    if (!best || area > best.area) best = { x:sumX/area+x0, y:sumY/area+y0, area };
+  }
+  return best;
+}
+
+// Otsu first; a hard shadow across the window can push the split above the
+// shadowed paper and fuse everything into one window-sized blob, so retry at
+// darker percentiles — the mark is only ~1% of a window's pixels.
+function findMark(imgData, xr0, xr1, yr0, yr1){
+  const { width:w, height:h, data } = imgData;
+  const x0=Math.floor(xr0*w), x1=Math.floor(xr1*w), y0=Math.floor(yr0*h), y1=Math.floor(yr1*h);
+  const bw=x1-x0, bh=y1-y0, n=bw*bh;
+  const lum8 = new Uint8ClampedArray(n), hist = new Uint32Array(256);
+  for (let y=0;y<bh;y++) for (let x=0;x<bw;x++){
+    const i = ((y0+y)*w + (x0+x))*4;
+    const l = (0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2])|0;
+    lum8[y*bw+x] = l; hist[l]++;
+  }
+  const tries = [otsuThreshold(hist,n)];
+  for (const pct of [0.10,0.04,0.015]){
+    const want = n*pct; let acc=0, t=0;
+    for (; t<256; t++){ acc += hist[t]; if (acc>=want) break; }
+    if (t>1 && !tries.includes(t)) tries.push(t);
+  }
+  for (const th of tries){
+    const b = largestBlobAtThreshold(lum8,bw,bh,th,x0,y0);
+    if (b) return b;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ *
+ * 3. Homography
+ * ------------------------------------------------------------------ */
+function solveLinear(Ain, bin){
+  const n = bin.length, M = Ain.map((row,i)=>row.concat([bin[i]]));
+  for (let col=0; col<n; col++){
+    let p = col;
+    for (let r=col+1;r<n;r++) if (Math.abs(M[r][col])>Math.abs(M[p][col])) p=r;
+    [M[col],M[p]] = [M[p],M[col]];
+    const d = M[col][col];
+    for (let c=col;c<=n;c++) M[col][c] /= d;
+    for (let r=0;r<n;r++){ if(r===col) continue;
+      const f = M[r][col];
+      for (let c=col;c<=n;c++) M[r][c] -= f*M[col][c];
+    }
+  }
+  return M.map(r=>r[n]);
+}
+function solveH(from, to){
+  const A=[], b=[];
+  ["tl","tr","bl","br"].forEach(k=>{
+    const {x,y}=from[k], {x:X,y:Y}=to[k];
+    A.push([x,y,1,0,0,0,-x*X,-y*X]); b.push(X);
+    A.push([0,0,0,x,y,1,-x*Y,-y*Y]); b.push(Y);
+  });
+  const h = solveLinear(A,b);
+  return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+}
+function applyH(h,x,y){
+  const d = h[6]*x + h[7]*y + h[8];
+  return { x:(h[0]*x+h[1]*y+h[2])/d, y:(h[3]*x+h[4]*y+h[5])/d };
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. Reading
+ * ------------------------------------------------------------------ */
+// The brightest pixel in a small neighbourhood is the paper, whichever way the
+// light falls. A single global reference fails under a lighting gradient.
+function median(xs){
+  const s = xs.slice().sort((a,b)=>a-b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m-1]+s[m])/2;
+}
+
+function localPaper(img, cx, cy, boxPx){
+  // The brightest single pixel is whatever speck of glare or sensor noise the
+  // neighbourhood happens to contain, which sets the reference too high and
+  // makes ordinary paper read as partly inked. An upper percentile is the same
+  // idea - "what does paper look like around here" - without chasing outliers.
+  const vals = [];
+  const r = Math.round(boxPx);
+  for (let dy=-r; dy<=r; dy+=2) for (let dx=-r; dx<=r; dx+=2){
+    const x = Math.round(cx)+dx, y = Math.round(cy)+dy;
+    if (x<0||y<0||x>=img.width||y>=img.height) continue;
+    const i = (y*img.width+x)*4;
+    vals.push(lum(img.data[i],img.data[i+1],img.data[i+2]));
+  }
+  if (!vals.length) return 255;
+  vals.sort((a,b)=>a-b);
+  return vals[Math.floor(vals.length*0.85)] || 255;
+}
+// Every group on the card is a row of identical bubbles, printed in the same
+// pass and photographed under the same light, and at most a couple are ever
+// marked. So the BRIGHTEST interior in a group is a known-empty sample of that
+// exact printed shape: the blurred ring, the paper tone and the local lighting
+// are all present in it, and dividing by it cancels them out. Estimating "what
+// does paper look like near here" instead is what made empty bubbles read
+// 0.4-0.5 on a grainy photo.
+// Four corner marks fix the card as a plane, but a fraction of a millimetre of
+// residual error remains - centroid rounding, a hair of lens distortion, paper
+// that is not perfectly flat. At this scale that is enough to slide a small
+// sample disc off a hand-drawn mark. The card is covered in printed rings
+// though, so rather than trusting the homography to the last 0.1mm we let the
+// bubbles themselves pull the map into place: find the one shift that makes the
+// printed rings darkest, and apply it everywhere.
+function findMapOffset(img, groups){
+  const probes = [];
+  groups.forEach(g => g.items.forEach(b => {
+    const r = b.d * 0.44 * SC;
+    const ring = [];
+    for (let a = 0; a < 16; a++){
+      const t = a * Math.PI / 8;
+      ring.push([Math.cos(t)*r, Math.sin(t)*r]);
+    }
+    probes.push({ cx:b.x*SC, cy:b.y*SC, ring });
+  }));
+  if (!probes.length) return { dx:0, dy:0 };
+
+  const score = (dx, dy) => {
+    let sum = 0, n = 0;
+    for (const p of probes){
+      for (const [ox, oy] of p.ring){
+        const x = Math.round(p.cx + dx + ox), y = Math.round(p.cy + dy + oy);
+        if (x<0||y<0||x>=img.width||y>=img.height) continue;
+        const i = (y*img.width + x)*4;
+        sum += lum(img.data[i], img.data[i+1], img.data[i+2]); n++;
+      }
+    }
+    return n ? sum/n : 255;                       // darkest wins
+  };
+
+  let best = { dx:0, dy:0, v:Infinity };
+  const step = 0.15 * SC, reach = Math.round(1.2 * SC / step);
+  for (let iy=-reach; iy<=reach; iy++){
+    for (let ix=-reach; ix<=reach; ix++){
+      const dx = ix*step, dy = iy*step;
+      const v = score(dx, dy);
+      if (v < best.v) best = { dx, dy, v };
+    }
+  }
+  return best;
+}
+
+function groupFills(img, items, paperHint, off){
+  const inner = items.map(b =>
+    meanLumAt(img, b.x*SC + off.dx, b.y*SC + off.dy, Math.max(2, b.d*0.28*SC)));
+  // Guard the case where every bubble in a group is inked: an empty interior is
+  // close to plain paper, so refuse a reference far darker than that.
+  const ref = Math.max(Math.max.apply(null, inner), paperHint * 0.72);
+  return inner.map(v => Math.max(0, (ref - v) / Math.max(1, ref)));
+}
+
+function meanLumAt(img, cx, cy, rPx){
+  let sum=0, n=0; const r = Math.round(rPx);
+  for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+    if (dx*dx+dy*dy > r*r) continue;
+    const x = Math.round(cx)+dx, y = Math.round(cy)+dy;
+    if (x<0||y<0||x>=img.width||y>=img.height) continue;
+    const i = (y*img.width+x)*4;
+    sum += lum(img.data[i],img.data[i+1],img.data[i+2]); n++;
+  }
+  return n ? sum/n : 255;
+}
+
+// A fixed cut cannot serve every photo: a dim, grainy shot pushes genuine marks
+// down and a bright one lifts the empties, so any constant is wrong somewhere.
+// Every card carries its own calibration though - 144 bubbles, mostly empty and
+// a handful inked - and that shape has a specific signature: a dense low cluster,
+// then a jump. Otsu is the wrong tool (it balances variance, so a wide spread of
+// empties makes it cut INSIDE them); the widest jump in the upper half is the
+// separation we actually want.
+function adaptiveThreshold(vals){
+  const s = vals.slice().sort((a,b) => a-b), n = s.length;
+  const span = s[n-1] - s[0];
+  if (span < 0.25) return { hi:2, lo:2, span, gap:0 };      // nothing marked
+
+  let bestGap = 0, bestIdx = -1;
+  for (let i = Math.floor(n*0.5); i < n-1; i++){
+    const g = s[i+1] - s[i];
+    if (g > bestGap){ bestGap = g; bestIdx = i; }
+  }
+  // A clean break gives a threshold sitting in genuinely empty space. Without
+  // one the ink and the paper really do overlap, so fall back to a fixed cut
+  // and let the borderline flags carry the doubt to the user.
+  const th = bestGap >= 0.12 ? (s[bestIdx] + s[bestIdx+1]) / 2 : 0.55;
+  return { hi:th, lo:Math.max(0.18, th-0.12), span, gap:bestGap };
+}
+
+// A single bubble still needs an absolute read for the pre-printed side code,
+// which has no row of siblings to compare itself against.
+function readBubble(img, b){
+  const paper = localPaper(img, b.x*SC, b.y*SC, b.d*1.9*SC);
+  const v = meanLumAt(img, b.x*SC, b.y*SC, Math.max(2, b.d*0.19*SC));
+  return Math.max(0, (paper - v) / Math.max(1, paper));
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. Wiring
+ * ------------------------------------------------------------------ */
+const srcCanvas = document.getElementById("srcCanvas");
+const srcCtx = srcCanvas.getContext("2d", { willReadFrequently:true });
+const dstCanvas = document.getElementById("dstCanvas");
+const dstCtx = dstCanvas.getContext("2d", { willReadFrequently:true });
+const statusEl = document.getElementById("status");
+const readBtn = document.getElementById("readBtn");
+const handles = { tl:document.getElementById("h-tl"), tr:document.getElementById("h-tr"),
+                  bl:document.getElementById("h-bl"), br:document.getElementById("h-br") };
+let corners = null;
+
+function layoutHandles(){
+  for (const k in handles){
+    handles[k].style.left = (corners[k].x / srcCanvas.width * 100) + "%";
+    handles[k].style.top  = (corners[k].y / srcCanvas.height * 100) + "%";
+  }
+}
+for (const k in handles){
+  const el = handles[k];
+  el.addEventListener("pointerdown", e => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId);
+    const move = ev => {
+      const r = document.getElementById("stage").getBoundingClientRect();
+      const fx = Math.min(1, Math.max(0, (ev.clientX-r.left)/r.width));
+      const fy = Math.min(1, Math.max(0, (ev.clientY-r.top)/r.height));
+      corners[k] = { x:fx*srcCanvas.width, y:fy*srcCanvas.height };
+      el.style.left = (fx*100)+"%"; el.style.top = (fy*100)+"%";
+    };
+    const up = ev => { el.releasePointerCapture(ev.pointerId);
+      el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  });
+}
+
+function loadImage(src){
+  const im = new Image();
+  im.onload = () => {
+    const maxW = 1600;
+    const s = Math.min(1, maxW/im.width);
+    srcCanvas.width = Math.round(im.width*s);
+    srcCanvas.height = Math.round(im.height*s);
+    srcCtx.drawImage(im, 0, 0, srcCanvas.width, srcCanvas.height);
+    document.getElementById("stage").classList.add("on");
+    const img = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
+    const W = 0.34;
+    const f = { tl:findMark(img,0,W,0,W), tr:findMark(img,1-W,1,0,W),
+                bl:findMark(img,0,W,1-W,1), br:findMark(img,1-W,1,1-W,1) };
+    const missing = Object.keys(f).filter(k=>!f[k]);
+    corners = {
+      tl: f.tl || {x:srcCanvas.width*.08, y:srcCanvas.height*.08},
+      tr: f.tr || {x:srcCanvas.width*.92, y:srcCanvas.height*.08},
+      bl: f.bl || {x:srcCanvas.width*.08, y:srcCanvas.height*.92},
+      br: f.br || {x:srcCanvas.width*.92, y:srcCanvas.height*.92},
+    };
+    layoutHandles();
+    readBtn.disabled = !MAP;
+    window.__cornersReady = true;
+    const auto = new URLSearchParams(location.search).get("auto") === "1";
+    if (!MAP){
+      statusEl.textContent = "Photo loaded — waiting for the card layout…";
+      if (auto) window.__autoPending = true;
+      return;
+    }
+    statusEl.textContent = missing.length
+      ? ("Found " + (4-missing.length) + "/4 corners — drag " + missing.join(", ") + " onto the black squares.")
+      : "Found all 4 corners. Check the handles, then read.";
+    if (auto) run();
+  };
+  im.onerror = () => { statusEl.textContent = "Could not load that photo."; };
+  im.src = src;
+}
+document.getElementById("file").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  statusEl.textContent = "Loading photo…";
+  loadImage(URL.createObjectURL(file));
+});
+
+readBtn.addEventListener("click", () => { statusEl.textContent="Reading…"; setTimeout(run, 20); });
+
+function run(){
+  if (!MAP){ statusEl.textContent = "Still loading the card layout — try again in a second."; return; }
+  if (!corners){ statusEl.textContent = "Choose a photo first."; return; }
+  // rectify: map the four found marks onto their true positions
+  const H = solveH({ tl:{x:MARK.tl.x*SC,y:MARK.tl.y*SC}, tr:{x:MARK.tr.x*SC,y:MARK.tr.y*SC},
+                     bl:{x:MARK.bl.x*SC,y:MARK.bl.y*SC}, br:{x:MARK.br.x*SC,y:MARK.br.y*SC} },
+                   corners);
+  dstCanvas.width = DST_W; dstCanvas.height = DST_H;
+  const src = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
+  const out = dstCtx.createImageData(DST_W, DST_H);
+  for (let y=0; y<DST_H; y++){
+    for (let x=0; x<DST_W; x++){
+      const p = applyH(H, x, y);
+      const i = (y*DST_W+x)*4;
+      const sx = Math.round(p.x), sy = Math.round(p.y);
+      if (sx<0||sy<0||sx>=src.width||sy>=src.height){ out.data[i]=out.data[i+1]=out.data[i+2]=210; out.data[i+3]=255; continue; }
+      const j = (sy*src.width+sx)*4;
+      out.data[i]=src.data[j]; out.data[i+1]=src.data[j+1]; out.data[i+2]=src.data[j+2]; out.data[i+3]=255;
+    }
+  }
+  dstCtx.putImageData(out,0,0);
+  const img = dstCtx.getImageData(0,0,DST_W,DST_H);
+  // stash the untouched rectified card: the overlay is drawn on top for the
+  // viewer, but a capture wants the raw pixels, not the annotations
+  const rectifiedClean = dstCanvas.toDataURL("image/jpeg", 0.85);
+
+  // Prove the rectification is real. If a corner was never found, the fallback
+  // guess (or a wrong blob) still yields a confident-looking but nonsense read:
+  // the whole card shifts and every row is off by one. A 6mm registration
+  // square must be solid black at each corner of the rectified image — if it
+  // isn't, that corner was not the mark, and no reading is trustworthy.
+  const badMarks = ["tl","tr","bl","br"].filter(k => {
+    const m = MARK[k];
+    const v = meanLumAt(img, m.x*SC, m.y*SC, 1.6*SC);
+    return v > 130;                       // a solid mark reads far darker
+  });
+  if (badMarks.length){
+    window.__lastRun = { error:"marks", badMarks };
+    capture({ error:"marks", badMarks });
+    document.getElementById("results").innerHTML =
+      `<div class="card"><div class="hdr"><span class="big">Can\u2019t read this photo</span>
+       <span class="t">card-v2</span></div>
+       <p style="font-size:.9rem;line-height:1.55;margin:.2rem 0 .6rem">
+       The <b>${badMarks.join(", ")}</b> corner square${badMarks.length>1?"s were":" was"} not found
+       where ${badMarks.length>1?"they":"it"} should be, so the card is not lined up and every
+       row would be read off by a few millimetres.</p>
+       <p style="font-size:.9rem;line-height:1.55;margin:0">
+       Retake the photo with <b>all four black squares visible</b>, straight on and with the whole
+       card in frame \u2014 or drag the green handles onto the squares and read again.</p></div>`;
+    statusEl.textContent = "Corners not lined up — nothing read.";
+    return;
+  }
+
+  // which side is this? the two pre-printed squares, exactly one solid
+  const probe = MAP.white.code.map(c => readBubble(img, {x:c.x, y:c.y, d:3}));
+  // One square is solid and one hollow, printed together under the same light,
+  // so their difference is the reliable signal - an absolute cut fails the
+  // moment a photo is dim enough to lift the hollow one.
+  const side = (probe[0] - probe[1] > 0.30) ? "white"
+             : (probe[1] - probe[0] > 0.30) ? "red" : null;
+  const sheet = MAP[side || "white"];
+
+  // read everything first, so the threshold comes from this card's own spread
+  // rather than a number baked in from some other photo
+  const off = findMapOffset(img, sheet.groups);
+  const raw = sheet.groups.map(g => {
+    const hint = median(g.items.map(it =>
+      localPaper(img, it.x*SC + off.dx, it.y*SC + off.dy, it.d*1.9*SC)));
+    return groupFills(img, g.items, hint, off);
+  });
+  const T = adaptiveThreshold(raw.flat());
+
+  const groups = sheet.groups.map((g, gi) => {
+    const reads = g.items.map((it, ii) => ({ label:it.label, fill:raw[gi][ii] }));
+    const hits = reads.filter(r => r.fill >= T.hi);
+    const maybes = reads.filter(r => r.fill >= T.lo && r.fill < T.hi);
+    let value = null, flag = null;
+    if (g.kind === "one"){
+      if (hits.length === 1) value = hits[0].label;
+      else if (hits.length === 0){
+        // exactly one choice is expected here, so a single reading standing
+        // clear of the rest of its own row is the answer even when it is faint
+        const sorted = reads.slice().sort((a,b)=>b.fill-a.fill);
+        if (sorted.length > 1 && sorted[0].fill >= T.lo && sorted[0].fill - sorted[1].fill >= 0.18){
+          value = sorted[0].label; flag = "faint mark";
+        } else if (maybes.length) flag = "faint mark?";
+      }
+      else { value = hits.map(h=>h.label).join(" + "); flag = "more than one marked"; }
+    } else {
+      // Five bubbles printed together in one box under the same light: if one
+      // reads far darker than its own neighbours it is inked, even when the
+      // whole card sits below the global cut. This is what rescues a real mark
+      // on a dim photo instead of calling it borderline.
+      const med = median(reads.map(r=>r.fill));
+      const local = reads.filter(r => r.fill >= med + 0.25 && r.fill >= T.lo);
+      const set = new Set(hits.map(h=>h.label));
+      local.forEach(r => set.add(r.label));
+      value = reads.filter(r => set.has(r.label)).map(r => r.label);
+      const stillOdd = maybes.filter(r => !set.has(r.label));
+      if (stillOdd.length) flag = stillOdd.length + " borderline";
+    }
+    return { name:g.name, kind:g.kind, scale:!!g.scale, value, flag, reads };
+  });
+
+  window.__rectifiedClean = rectifiedClean;
+  const result = { side, sideProbe:probe, groups, threshold:T,
+                   offset:{ dx:off.dx/SC, dy:off.dy/SC } };
+  window.__lastRun = result;
+  capture(result);
+
+  // Always paint the overlay: a mis-placed map is instantly visible as circles
+  // sitting off their bubbles, which no amount of staring at numbers reveals.
+  // Outer ring = where the map expects the bubble; inner disc = what was
+  // actually sampled; colour = the verdict.
+  sheet.groups.forEach((g,gi) => {
+    g.items.forEach((it,ii) => {
+      const f = groups[gi].reads[ii].fill;
+      const colour = f>=T.hi ? "#00B050" : f>=T.lo ? "#E8890C" : "#2F86E8";
+      const cx = it.x*SC + off.dx, cy = it.y*SC + off.dy;
+      dstCtx.beginPath();
+      dstCtx.arc(cx, cy, it.d*0.5*SC, 0, Math.PI*2);
+      dstCtx.strokeStyle = colour; dstCtx.globalAlpha = 0.45;
+      dstCtx.lineWidth = 1; dstCtx.stroke();
+      dstCtx.globalAlpha = 1;
+      dstCtx.beginPath();
+      dstCtx.arc(cx, cy, Math.max(2, it.d*0.19*SC), 0, Math.PI*2);
+      dstCtx.fillStyle = colour; dstCtx.globalAlpha = f>=T.hi ? 0.55 : 0.30;
+      dstCtx.fill(); dstCtx.globalAlpha = 1;
+    });
+  });
+  render(result);
+  document.getElementById("overlayKey").hidden = false;
+  statusEl.textContent = side ? ("Read as the " + side + " side.")
+                              : "Could not read the side code — check the top-left of the card.";
+}
+
+// Send the photo and the full numbers back to the machine serving this page, so
+// a missed mark can be diagnosed from what was actually measured rather than
+// from a description of it. Best-effort: a failure here never affects the read.
+function capture(result){
+  try {
+    const body = JSON.stringify({
+      ua: navigator.userAgent,
+      photo: srcCanvas.toDataURL("image/jpeg", 0.85),
+      rectified: window.__rectifiedClean || dstCanvas.toDataURL("image/jpeg", 0.85),
+      result: result,
+    });
+    fetch("/_capture", { method:"POST", headers:{ "Content-Type":"application/json" }, body })
+      .then(r => r.json())
+      .then(j => { if (j && j.ok) statusEl.textContent += "  (saved " + j.id + ")"; })
+      .catch(() => {});
+  } catch (e){ /* capture is a convenience, never a requirement */ }
+}
+
+function render(res){
+  const g = n => res.groups.find(x => x.name.toLowerCase() === n.toLowerCase());
+  const esc = s => String(s).replace(/[<>&]/g, c=>({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
+  const one = x => (x && x.value) ? esc(x.value) : "<span class='flag'>not marked</span>";
+  const parts = n => res.groups.filter(x => x.name.toLowerCase() === n.toLowerCase());
+  const joined = n => { const gs = parts(n);
+    return gs.length && gs.every(x => x.value) ? { value: gs.map(x=>x.value).join(" ") } : null; };
+  const you = joined("You are"), wine = g("Wine"), price = g("Price"), rating = g("Rating");
+  const structure = ["Body","Acidity","Tannin","Sweetness","Alcohol"].map(g).filter(Boolean);
+  const flavours = res.groups.filter(x => x.kind === "many");
+  const marked = flavours.filter(f => f.value.length);
+  const flags = res.groups.filter(x => x.flag);
+
+  document.getElementById("results").innerHTML = `
+    <div class="card">
+      <div class="hdr">
+        <span class="big">${res.side ? (res.side === "white" ? "White wine" : "Red wine") : "Side unknown"}</span>
+        <span class="t">card-v2</span>
+      </div>
+      <div class="row"><span class="k">Taster</span><span class="v">${one(you)}</span></div>
+      <div class="row"><span class="k">Wine</span><span class="v">${one(wine)}</span></div>
+      <div class="row"><span class="k">Price guess</span><span class="v">${one(price)}</span></div>
+      <div class="row"><span class="k">Rating</span><span class="v">${rating && rating.value ? esc(rating.value)+" / 10" : "<span class='flag'>not marked</span>"}</span></div>
+      <div class="row"><span class="k">Structure</span><span class="v">${
+        structure.map(s => esc(s.name)+" "+(s.value ?? "–")).join(" · ")}</span></div>
+      <div class="row"><span class="k">Flavours</span><span class="v">${
+        marked.length
+          ? marked.map(f => f.value.map(v =>
+              `<span class="chip hit">${esc(v)}<span class="t" style="margin-left:.35rem">${esc(f.name)}</span></span>`).join("")).join("")
+          : "<span class='flag'>none marked</span>"}</span></div>
+      ${flags.length ? `<div class="row"><span class="k">Check</span><span class="v flag">${
+        flags.map(f => esc(f.name)+": "+esc(f.flag)).join(" · ")}</span></div>` : ""}
+      <details>
+        <summary>Per-bubble readings</summary>
+        <table><thead><tr><th>Group</th><th>Option</th><th style="text-align:right">Fill</th></tr></thead><tbody>
+        ${res.groups.map(gr => gr.reads.map(r =>
+          `<tr><td>${esc(gr.name)}</td><td>${esc(r.label)}</td><td class="n" style="${
+            r.fill>=res.threshold.hi?"color:var(--ok);font-weight:600":r.fill>=res.threshold.lo?"color:var(--warn)":""
+          }">${r.fill.toFixed(2)}</td></tr>`).join("")).join("")}
+        </tbody></table>
+      </details>
+    </div>`;
+}
+
+/* Wait for the reference card — including its webfonts. Measuring before the
+   fonts land gives a layout built from fallback metrics: every text block is a
+   slightly different height and the differences accumulate down the page, so
+   the map is fine at the top and several mm out by the flavour grid. */
+(function boot(tries){
+  // Anything here can throw transiently while the reference frame is still
+  // settling (a document swapped mid-navigation, fonts not yet attached). An
+  // uncaught throw kills the retry chain silently and the page sits on
+  // "Loading card layout" forever, so every failure just schedules another try.
+  const retry = why => {
+    if (tries > 200){ statusEl.textContent = "Could not load the card layout" + (why ? ": " + why : "."); return; }
+    setTimeout(() => boot(tries+1), 100);
+  };
+  let doc;
+  try {
+    doc = document.getElementById("ref").contentDocument;
+    const sheet = doc && doc.getElementById("sheet-white");
+    if (!sheet || !sheet.querySelector(".bubble")) return retry();
+  } catch (e){ return retry(e.message); }
+  try {
+    // Same guard, applied to whatever copy of the card this frame loaded.
+    if (doc.head && !doc.getElementById("__noboost")){
+      const st = doc.createElement("style");
+      st.id = "__noboost";
+      // Mobile browsers clamp text to a minimum size. The card's smallest
+      // captions are 1.5mm (~5.7px), well under that floor, so every flavour
+      // box grows a little and the error accumulates down the page - the
+      // ruler ends up several mm taller than the card actually is.
+      // Zooming the reference sheet scales layout (not just paint), so every
+      // font clears the floor and the proportions stay exact. All map
+      // coordinates are relative to the sheet's own width, so the zoom
+      // cancels out.
+      st.textContent =
+        "html{-webkit-text-size-adjust:100%;text-size-adjust:100%}" +
+        "#sheet-white,#sheet-red{zoom:3}";
+      doc.head.appendChild(st);
+    }
+    if (!doc.fonts) return retry("no font API");
+  } catch (e){ return retry(e.message); }
+
+  // fonts.ready can simply never settle for an offscreen frame, which would
+  // hang boot forever, so race it against a timeout. Proceeding early is safe:
+  // buildMap sanity-checks the rendered layout and we retry if it looks wrong,
+  // so a late-arriving font corrects itself on the next pass.
+  Promise.race([
+    doc.fonts.ready.catch(() => {}),
+    new Promise(res => setTimeout(res, 2500)),
+  ]).then(() => requestAnimationFrame(() => {
+    let built = false;
+    try { built = buildMap(); }
+    catch (err){ return retry(err.message); }
+    if (!built) return retry("ruler measured " + (window.__layoutGap||0).toFixed(1) + "mm gap, expected ~8.9mm");
+    window.__mapReady = true;
+    // A photo may already be loaded and waiting: on a phone the layout usually
+    // finishes second, and nothing else would ever re-enable the button.
+    if (corners){
+      readBtn.disabled = false;
+      statusEl.textContent = "Ready — tap Read card.";
+      if (window.__autoPending){ window.__autoPending = false; run(); }
+    } else {
+      statusEl.textContent = "Card layout loaded — choose a photo.";
+    }
+    const q = new URLSearchParams(location.search).get("img");
+    if (q) loadImage(q);
+  }));
+})(0);
+</script>
+</body>
+</html>

@@ -435,29 +435,10 @@
     return threshold;
   }
 
-  // Finds the largest solid, roughly-square dark blob within one corner window.
-  // Two things matter for real photos with background clutter (desk, shadows,
-  // a notebook's binding) near the card's edges:
-  //  - the threshold is computed LOCALLY from just this window, not the whole
-  //    photo — a global threshold treats far-away clutter as equally relevant,
-  //    and can even fuse the registration mark into a same-toned neighbour
-  //    (a merged blob fails the aspect/fill checks and vanishes as a candidate
-  //    entirely, which no amount of picking-by-position can then recover);
-  //  - among whatever qualifies, we take the LARGEST, not merely the nearest
-  //    to the corner — a 6mm square is ~16x the area of a 3mm filled bubble,
-  //    so genuine size beats anything else nearby that happens to qualify.
-  function findLargestSquareInWindow(imgData, xr0, xr1, yr0, yr1){
-    const { width:w, height:h, data } = imgData;
-    const x0 = Math.floor(xr0*w), x1 = Math.floor(xr1*w), y0 = Math.floor(yr0*h), y1 = Math.floor(yr1*h);
-    const bw = x1-x0, bh = y1-y0, n = bw*bh;
-    const lum8 = new Uint8ClampedArray(n);
-    const hist = new Uint32Array(256);
-    for (let y=0; y<bh; y++) for (let x=0; x<bw; x++){
-      const i = ((y0+y)*w + (x0+x)) * 4;
-      const l = (0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]) | 0;
-      lum8[y*bw+x] = l; hist[l]++;
-    }
-    const threshold = otsuThreshold(hist, n);
+  // One pass of blob-finding at a given threshold. Split out from the function
+  // below so the caller can retry at darker thresholds.
+  function largestBlobAtThreshold(lum8, bw, bh, threshold, x0, y0){
+    const n = bw*bh;
     const visited = new Uint8Array(n);
     const stack = new Int32Array(n);
     const minSize = Math.min(bw,bh)*0.06, maxSize = Math.min(bw,bh)*0.6;
@@ -486,6 +467,45 @@
       if (!best || area > best.area) best = { x:sumX/area+x0, y:sumY/area+y0, area };
     }
     return best;
+  }
+
+  // Finds the largest solid, roughly-square dark blob within one corner window.
+  // Two things matter for real photos with background clutter (desk, shadows,
+  // a notebook's binding) near the card's edges:
+  //  - the threshold is computed LOCALLY from just this window, not the whole
+  //    photo — a global threshold treats far-away clutter as equally relevant,
+  //    and can even fuse the registration mark into a same-toned neighbour;
+  //  - among whatever qualifies, we take the LARGEST, not merely the nearest
+  //    to the corner — a 6mm square is ~16x the area of a 3mm filled bubble.
+  // Otsu alone is not enough when a hard shadow crosses the window: the split
+  // can land ABOVE the shadowed paper, so paper, desk and mark all fall on the
+  // dark side and flood-fill into one window-sized blob that then fails the
+  // size check, losing the corner entirely. The mark is only ~1% of a window's
+  // pixels, so we retry at progressively darker percentile thresholds, which
+  // isolate actual ink regardless of how the window is lit.
+  function findLargestSquareInWindow(imgData, xr0, xr1, yr0, yr1){
+    const { width:w, height:h, data } = imgData;
+    const x0 = Math.floor(xr0*w), x1 = Math.floor(xr1*w), y0 = Math.floor(yr0*h), y1 = Math.floor(yr1*h);
+    const bw = x1-x0, bh = y1-y0, n = bw*bh;
+    const lum8 = new Uint8ClampedArray(n);
+    const hist = new Uint32Array(256);
+    for (let y=0; y<bh; y++) for (let x=0; x<bw; x++){
+      const i = ((y0+y)*w + (x0+x)) * 4;
+      const l = (0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]) | 0;
+      lum8[y*bw+x] = l; hist[l]++;
+    }
+    const tries = [otsuThreshold(hist, n)];
+    for (const pct of [0.10, 0.04, 0.015]){
+      const want = n*pct;
+      let acc = 0, t = 0;
+      for (; t<256; t++){ acc += hist[t]; if (acc >= want) break; }
+      if (t > 1 && !tries.includes(t)) tries.push(t);
+    }
+    for (const th of tries){
+      const best = largestBlobAtThreshold(lum8, bw, bh, th, x0, y0);
+      if (best) return best;
+    }
+    return null;
   }
 
   function autoDetectCorners(){
