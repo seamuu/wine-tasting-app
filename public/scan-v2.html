@@ -8,23 +8,15 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Same paper palette as the app that embeds this. Committed to one light
+     look rather than following the device: a wine list is printed on paper. */
   :root{
-    --backdrop:#F1ECE6; --ink:#17110F; --muted:#7A6F65; --line:#DCD3C8;
-    --accent:#7A1228; --accent-soft:#F3E1E4; --surface:#FFFFFF;
-    --ok:#1C6B5B; --warn:#A8620E;
+    --backdrop:#F7F2E9; --surface:#FFFDF8; --ink:#241A15; --muted:#6B5A4E;
+    --line:#DED2C0; --accent:#6E1327; --accent-soft:#F0E2E2;
+    --ok:#5E6E42; --warn:#8A5A00;
   }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --backdrop:#171310; --ink:#EDE6DF; --muted:#9C9086; --line:#38312B;
-      --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
-      --ok:#6FC5AF; --warn:#E0A45C;
-    }
-  }
-  :root[data-theme="dark"]{
-    --backdrop:#171310; --ink:#EDE6DF; --muted:#9C9086; --line:#38312B;
-    --accent:#E3899E; --accent-soft:#3A1E24; --surface:#1F1A16;
-    --ok:#6FC5AF; --warn:#E0A45C;
-  }
+  ::selection{ background:var(--accent); color:var(--backdrop); }
+
   *{ box-sizing:border-box; }
   body{ margin:0; background:var(--backdrop); color:var(--ink);
         font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
@@ -351,47 +343,68 @@ function localPaper(img, cx, cy, boxPx){
 // 0.4-0.5 on a grainy photo.
 // Four corner marks fix the card as a plane, but a fraction of a millimetre of
 // residual error remains - centroid rounding, a hair of lens distortion, paper
-// that is not perfectly flat. At this scale that is enough to slide a small
-// sample disc off a hand-drawn mark. The card is covered in printed rings
+// that is not perfectly flat. At this scale that is enough to slide a sample
+// disc off a small hand-drawn mark. The card is covered in printed rings
 // though, so rather than trusting the homography to the last 0.1mm we let the
-// bubbles themselves pull the map into place: find the one shift that makes the
-// printed rings darkest, and apply it everywhere.
-function findMapOffset(img, groups){
-  const probes = [];
-  groups.forEach(g => g.items.forEach(b => {
-    const r = b.d * 0.44 * SC;
-    const ring = [];
+// bubbles pull the map into place: find the shift that makes the printed rings
+// darkest.
+//
+// One shift for the whole card is not enough. A bent or tilted card leaves a
+// gradient - too high at the top, too low at the bottom - which no single
+// translation can remove, so each group is refined again on its own rings.
+function ringProbes(items){
+  return items.map(b => {
+    const r = b.d * 0.44 * SC, ring = [];
     for (let a = 0; a < 16; a++){
       const t = a * Math.PI / 8;
       ring.push([Math.cos(t)*r, Math.sin(t)*r]);
     }
-    probes.push({ cx:b.x*SC, cy:b.y*SC, ring });
-  }));
-  if (!probes.length) return { dx:0, dy:0 };
+    return { cx:b.x*SC, cy:b.y*SC, ring };
+  });
+}
 
-  const score = (dx, dy) => {
-    let sum = 0, n = 0;
-    for (const p of probes){
-      for (const [ox, oy] of p.ring){
-        const x = Math.round(p.cx + dx + ox), y = Math.round(p.cy + dy + oy);
-        if (x<0||y<0||x>=img.width||y>=img.height) continue;
-        const i = (y*img.width + x)*4;
-        sum += lum(img.data[i], img.data[i+1], img.data[i+2]); n++;
-      }
+function ringDarkness(img, probes, dx, dy){
+  let sum = 0, n = 0;
+  for (const p of probes){
+    for (const [ox, oy] of p.ring){
+      const x = Math.round(p.cx + dx + ox), y = Math.round(p.cy + dy + oy);
+      if (x<0||y<0||x>=img.width||y>=img.height) continue;
+      const i = (y*img.width + x)*4;
+      sum += lum(img.data[i], img.data[i+1], img.data[i+2]); n++;
     }
-    return n ? sum/n : 255;                       // darkest wins
-  };
+  }
+  return n ? sum/n : 255;
+}
 
-  let best = { dx:0, dy:0, v:Infinity };
-  const step = 0.15 * SC, reach = Math.round(1.2 * SC / step);
-  for (let iy=-reach; iy<=reach; iy++){
-    for (let ix=-reach; ix<=reach; ix++){
-      const dx = ix*step, dy = iy*step;
-      const v = score(dx, dy);
+// coarse sweep then a fine one around the winner, so a wide search stays cheap
+function searchOffset(img, probes, ox, oy, reach, step){
+  let best = { dx:ox, dy:oy, v:Infinity };
+  const n = Math.round(reach/step);
+  for (let iy=-n; iy<=n; iy++){
+    for (let ix=-n; ix<=n; ix++){
+      const dx = ox + ix*step, dy = oy + iy*step;
+      const v = ringDarkness(img, probes, dx, dy);
       if (v < best.v) best = { dx, dy, v };
     }
   }
   return best;
+}
+
+function findMapOffset(img, groups){
+  const all = [];
+  groups.forEach(g => ringProbes(g.items).forEach(p => all.push(p)));
+  if (!all.length) return { global:{dx:0,dy:0}, per:groups.map(()=>({dx:0,dy:0})) };
+
+  // 3mm of reach, because the old 1.2mm limit was being hit and clipped
+  let g0 = searchOffset(img, all, 0, 0, 3.0*SC, 0.4*SC);
+  g0 = searchOffset(img, all, g0.dx, g0.dy, 0.5*SC, 0.1*SC);
+
+  const per = groups.map(g => {
+    const probes = ringProbes(g.items);
+    const r = searchOffset(img, probes, g0.dx, g0.dy, 0.8*SC, 0.1*SC);
+    return { dx:r.dx, dy:r.dy };
+  });
+  return { global:{ dx:g0.dx, dy:g0.dy }, per };
 }
 
 function groupFills(img, items, paperHint, off){
@@ -569,6 +582,7 @@ function run(){
   if (badMarks.length){
     window.__lastRun = { error:"marks", badMarks };
     capture({ error:"marks", badMarks });
+    announce({ error:"marks", badMarks, groups:[], side:null });
     document.getElementById("results").innerHTML =
       `<div class="card"><div class="hdr"><span class="big">Can\u2019t read this photo</span>
        <span class="t">card-v2</span></div>
@@ -594,8 +608,9 @@ function run(){
 
   // read everything first, so the threshold comes from this card's own spread
   // rather than a number baked in from some other photo
-  const off = findMapOffset(img, sheet.groups);
-  const raw = sheet.groups.map(g => {
+  const fit = findMapOffset(img, sheet.groups);
+  const raw = sheet.groups.map((g, gi) => {
+    const off = fit.per[gi];
     const hint = median(g.items.map(it =>
       localPaper(img, it.x*SC + off.dx, it.y*SC + off.dy, it.d*1.9*SC)));
     return groupFills(img, g.items, hint, off);
@@ -636,15 +651,20 @@ function run(){
 
   window.__rectifiedClean = rectifiedClean;
   const result = { side, sideProbe:probe, groups, threshold:T,
-                   offset:{ dx:off.dx/SC, dy:off.dy/SC } };
+                   offset:{ dx:fit.global.dx/SC, dy:fit.global.dy/SC },
+                   perGroupOffset: sheet.groups.map((g,gi) => ({
+                     name:g.name, y:+g.items[0].y.toFixed(1),
+                     dx:+(fit.per[gi].dx/SC).toFixed(2), dy:+(fit.per[gi].dy/SC).toFixed(2) })) };
   window.__lastRun = result;
   capture(result);
+  announce(result);
 
   // Always paint the overlay: a mis-placed map is instantly visible as circles
   // sitting off their bubbles, which no amount of staring at numbers reveals.
   // Outer ring = where the map expects the bubble; inner disc = what was
   // actually sampled; colour = the verdict.
   sheet.groups.forEach((g,gi) => {
+    const off = fit.per[gi];
     g.items.forEach((it,ii) => {
       const f = groups[gi].reads[ii].fill;
       const colour = f>=T.hi ? "#00B050" : f>=T.lo ? "#E8890C" : "#2F86E8";
@@ -664,6 +684,18 @@ function run(){
   document.getElementById("overlayKey").hidden = false;
   statusEl.textContent = side ? ("Read as the " + side + " side.")
                               : "Could not read the side code — check the top-left of the card.";
+}
+
+// When embedded in the app, hand the read up to the page around us. The parent
+// files it against a wine and a taster; this page stays usable standalone.
+function announce(result){
+  if (window.parent === window) return;
+  const priceGroup = (result.groups || []).find(g => g.name.toLowerCase() === "price");
+  window.parent.postMessage({
+    type: "card-v2-scan",
+    result,
+    buckets: priceGroup ? priceGroup.reads.map(r => r.label) : undefined,
+  }, "*");
 }
 
 // Send the photo and the full numbers back to the machine serving this page, so
