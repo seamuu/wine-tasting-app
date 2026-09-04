@@ -1,6 +1,11 @@
-// Data model per SPEC.md. Two identity axes stay deliberately blind on the
-// physical card (wine A-D, taster Color+Animal) and only get resolved to
-// real names here, by the organizer, during/after scan review.
+// Data model for card-v2: one card per wine per taster.
+//
+// Two things stay deliberately blind on paper and are only resolved here.
+// A taster writes no name - they mark two bubbles from a vocabulary the host
+// chose (Skinny/Twink, Colours/Animals, ...) - and a wine is only ever "A".
+// Because the vocabulary is switchable per event, the taster's two picks are
+// stored as plain strings rather than enums: the card is the source of truth
+// for what words exist, and the scanner reads them out of the card's own DOM.
 
 generator client {
   provider = "prisma-client"
@@ -18,92 +23,132 @@ enum FlightPosition {
   D
 }
 
-enum TasterColor {
+enum WineSide {
+  WHITE
   RED
-  ORANGE
-  YELLOW
-  GREEN
-  BLUE
 }
 
-enum TasterAnimal {
-  FOX
-  OWL
-  BEAR
-  WOLF
+// Whether the wine's story is held back until the cards are in, or shown from
+// the start. A blind flight is a guessing game; an open one is a guided
+// tasting. Same data either way - this only gates when the reveal unlocks.
+enum RevealMode {
+  BLIND
+  OPEN
+}
+
+enum WineStage {
+  UPCOMING // not poured yet
+  POURING  // cards being filled in
+  LOCKED   // cards in, scoring done, reveal not yet shown
+  REVEALED // shown on the big screen
 }
 
 enum ScanStatus {
-  PENDING
-  NEEDS_REVIEW
+  NEEDS_REVIEW // something was ambiguous or contradictory
   CONFIRMED
 }
 
 model Event {
-  id        String   @id @default(cuid())
-  name      String
-  date      DateTime
-  createdAt DateTime @default(now())
+  id         String     @id @default(cuid())
+  name       String
+  date       DateTime   @default(now())
+  idSet      String     @default("house") // which taster vocabulary the cards were printed with
+  revealMode RevealMode @default(BLIND)
+  cardVersion String    @default("card-v2")
+  createdAt  DateTime   @default(now())
 
-  wines Wine[]
-  cards Card[]
+  wines       Wine[]
+  tasters     Taster[]
+  submissions Submission[]
 }
 
 model Wine {
-  id             String         @id @default(cuid())
-  eventId        String
-  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  flightPosition FlightPosition
-  name           String
-  producer       String?
-  vintage        Int?
+  id       String         @id @default(cuid())
+  eventId  String
+  event    Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  position FlightPosition
+  side     WineSide
+  stage    WineStage      @default(UPCOMING)
 
-  ratings Rating[]
+  // --- identity, usually filled from a Vinmonopolet listing ---
+  name       String
+  producer   String?
+  vintage    Int?
+  region     String?
+  appellation String?
+  country    String?
+  grapes     String? // "Corvina 40%, Corvinone 20%, ..." as printed on the listing
+  sourceUrl  String?
+  sourceRef  String? // Vinmonopolet product number
+  teaser     String? // one non-identifying line to show during a blind round
 
-  @@unique([eventId, flightPosition])
+  // --- measured facts, straight off the listing ---
+  priceNok   Decimal? @db.Decimal(10, 2)
+  alcohol    Decimal? @db.Decimal(4, 2)
+  sugarGl    Decimal? @db.Decimal(5, 2)
+  acidGl     Decimal? @db.Decimal(5, 2)
+  tastingNote String?
+
+  // --- the host's answer key ---
+  // priceBucket is an index into the card's printed buckets rather than a
+  // price, because that is the granularity a taster can actually answer at.
+  priceBucket   Int?
+  keyBody       Int?
+  keyAcidity    Int?
+  keyTannin     Int?
+  keySweetness  Int?
+  keyAlcohol    Int?
+  keyFlavours   String[] @default([]) // "Red fruit|Cherry"
+  keyLockedAt   DateTime?
+
+  submissions Submission[]
+
+  @@unique([eventId, position])
 }
 
-// One per taster per event. cardVersion pins which coordinate map (card-v1,
-// ...) the raw photo was scanned against, per SPEC.md's versioning note.
-model Card {
-  id           String        @id @default(cuid())
-  eventId      String
-  event        Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  cardVersion  String        @default("card-v1")
-  tasterColor  TasterColor
-  tasterAnimal TasterAnimal
-  tasterName   String? // handwritten on the card, confirmed/corrected by the organizer during review
-  rawPhotoUrl  String?
-  scanStatus   ScanStatus    @default(PENDING)
-  createdAt    DateTime      @default(now())
+// One person at one event. They never write their name on the card; the host
+// can attach a real one here afterwards so the leaderboard reads properly.
+model Taster {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  idA     String // first bubble group, e.g. "Hot"
+  idB     String // second bubble group, e.g. "Mommy"
+  name    String?
 
-  ratings Rating[]
+  submissions Submission[]
 
-  @@unique([eventId, tasterColor, tasterAnimal])
+  @@unique([eventId, idA, idB])
 }
 
-model Rating {
-  id         String   @id @default(cuid())
-  cardId     String
-  card       Card     @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  wineId     String
-  wine       Wine     @relation(fields: [wineId], references: [id], onDelete: Cascade)
+// One scanned card: what one taster said about one wine.
+model Submission {
+  id       String @id @default(cuid())
+  eventId  String
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  wineId   String
+  wine     Wine   @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  tasterId String
+  taster   Taster @relation(fields: [tasterId], references: [id], onDelete: Cascade)
 
-  body       Int? // 1-5
-  acidity    Int? // 1-5
-  tannin     Int? // 1-5
-  sweetness  Int? // 1-5
-  overall    Int? // 1-10
-  oneWord    String?
+  side        WineSide // which face of the card was scanned, from the printed side code
+  priceBucket Int?
+  body        Int?
+  acidity     Int?
+  tannin      Int?
+  sweetness   Int?
+  alcohol     Int?
+  rating      Int? // 1-10
+  flavours    String[] @default([]) // "Red fruit|Cherry"
 
-  // per-field confidence, set null while a value is still "needs review"
-  bodyReview      Boolean @default(false)
-  acidityReview   Boolean @default(false)
-  tanninReview    Boolean @default(false)
-  sweetnessReview Boolean @default(false)
-  overallReview   Boolean @default(false)
+  status     ScanStatus @default(CONFIRMED)
+  reviewNote String?
+  photoPath  String?
+  // every bubble's fill value, kept so a disputed read can be re-examined
+  // without the original photo
+  readings   Json?
 
   createdAt DateTime @default(now())
 
-  @@unique([cardId, wineId])
+  @@unique([wineId, tasterId])
 }
