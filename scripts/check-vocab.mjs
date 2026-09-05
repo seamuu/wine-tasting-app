@@ -41,7 +41,7 @@ function fromLib(constName) {
  * lib/card.ts — because two are static pages and one is server code. Same deal
  * as the flavours: check rather than trust.
  */
-function idSets(source, label) {
+function idSets(source) {
   const start = source.indexOf("ID_SETS");
   if (start === -1) return null;
   const block = source.slice(start, source.indexOf("\n  };", start) + 1
@@ -62,7 +62,7 @@ let failed = 0;
     ["public/card-v2.html", card],
     ["public/names.html", readFileSync(join(root, "public/names.html"), "utf8")],
     ["lib/card.ts", readFileSync(join(root, "lib/card.ts"), "utf8")],
-  ].map(([name, src]) => [name, idSets(src, name)]);
+  ].map(([name, src]) => [name, idSets(src)]);
 
   const missing = sources.filter(([, v]) => !v);
   if (missing.length) {
