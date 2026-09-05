@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Where In Italy?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F7F2E9; --paper-2:#FFFDF8; --ink:#241A15; --ink-soft:#6B5A4E;
+    --rule:#DED2C0; --claret:#6E1327;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{ background:var(--paper); color:var(--ink);
+        font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+
+  .chrome{ max-width:1000px; margin:0 auto; padding:2.2rem 1.25rem 1rem; }
+  .kicker{ font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.18em;
+           text-transform:uppercase; color:var(--claret); }
+  h1{ font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:2.4rem; margin:.2rem 0 .5rem; }
+  .lede{ color:var(--ink-soft); line-height:1.6; max-width:66ch; margin:0 0 1.2rem; }
+  .toolbar{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin-bottom:1.4rem; }
+  .btn{ font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; border-radius:999px;
+        padding:.55rem 1.15rem; border:1px solid var(--rule); background:var(--paper-2);
+        color:var(--ink); display:inline-flex; align-items:center; gap:.5rem; }
+  .btn-primary{ background:var(--claret); border-color:var(--claret); color:#F0E2E2; }
+  select{ font:inherit; font-size:.82rem; font-weight:600; border:0; background:transparent;
+          color:inherit; cursor:pointer; }
+  .count{ color:var(--ink-soft); font-size:.85rem; }
+
+  .sheet{ width:210mm; height:297mm; background:#fff; margin:0 auto 8mm;
+          box-shadow:0 12px 28px -18px rgba(60,40,30,.4); }
+  .sheet svg{ display:block; width:100%; height:100%; }
+
+  @media print{
+    @page{ size:A4 portrait; margin:0; }
+    .chrome{ display:none; }
+    body{ background:#fff; }
+    .sheet{ box-shadow:none; margin:0; page-break-after:always; break-after:page; }
+    .sheet:last-child{ page-break-after:auto; break-after:auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="kicker">Wine Flight · map round</div>
+  <h1>Where in Italy?</h1>
+  <p class="lede">
+    One A4 map, and a small square of tracing paper each. Slide your square over the spot you
+    think the wine came from, mark <b>one dot</b>, and leave it there while it&rsquo;s photographed.
+    The four black corner squares stay uncovered on purpose — they are what tells the app where
+    your dot landed. Who you are and which wine it is get picked in the app as it scans, so the
+    same map is used all night.
+  </p>
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="window.print()">Print</button>
+    <label class="btn" style="cursor:pointer;">
+      <span style="font-weight:400;color:var(--ink-soft);font-size:.78rem;">Regions</span>
+      <select id="regions">
+        <option value="1">Named</option>
+        <option value="0">Blank — harder</option>
+      </select>
+    </label>
+    <label class="btn" style="cursor:pointer;">
+      <span style="font-weight:400;color:var(--ink-soft);font-size:.78rem;">Copies</span>
+      <select id="copies"></select>
+    </label>
+    <span class="count" id="count"></span>
+  </div>
+</div>
+
+<div id="sheets"></div>
+
+<script>
+/* --------------------------------------------------------------------------
+   Geometry, in millimetres on a 210 x 297 sheet. The scanner rectifies to this
+   same space using the four corner squares, exactly as it does for card-v2, so
+   these numbers are the contract between the printed sheet and the reader.
+
+   A dot at (x, y) mm becomes a place by straight linear inversion:
+
+     lon = MAP.lon0 + (x - MAP.x) / MAP.w * (MAP.lon1 - MAP.lon0)
+     lat = MAP.lat0 + (y - MAP.y) / MAP.h * (MAP.lat1 - MAP.lat0)
+
+   Both axes are linear in degrees, which is what makes that a two-line sum.
+   A degree of latitude is 1.346x a degree of longitude here, which is the true
+   ratio at 42N — the middle of Italy — so the country is the right shape and
+   fills a portrait page from the Alps to Sicily.
+   -------------------------------------------------------------------------- */
+const SHEET = { w: 210, h: 297 };
+const REG   = { size: 6, inset: 5 };   // centres at 8,8 / 202,8 / 8,289 / 202,289
+
+const MAP = { x: 12, y: 24, w: 186, h: 235,
+              lon0: 7.4, lon1: 18.8, lat0: 47.2, lat1: 36.5 };
+
+window.MAP_GEOMETRY = { SHEET, REG, MAP, relief: "relief-italy.png" };
+
+/** Wine regions, and which side of the dot the label sits on. */
+const REGIONS = [
+  { name:"Alto Adige",   lon:11.35, lat:46.50, at:"start" },
+  { name:"Valtellina",   lon:9.87,  lat:46.17, at:"end" },
+  { name:"Prosecco",     lon:12.05, lat:45.90, at:"start" },
+  { name:"Friuli",       lon:13.45, lat:45.95, at:"start" },
+  { name:"Franciacorta", lon:10.05, lat:45.55, at:"end" },
+  { name:"Valpolicella", lon:10.95, lat:45.53, at:"start", dy:-1.2 },
+  { name:"Soave",        lon:11.30, lat:45.30, at:"start", dy:1.8 },
+  { name:"Barolo",       lon:7.95,  lat:44.62, at:"end" },
+  { name:"Lambrusco",    lon:10.90, lat:44.65, at:"start" },
+  { name:"Chianti",      lon:11.30, lat:43.50, at:"start" },
+  { name:"Bolgheri",     lon:10.55, lat:43.20, at:"end" },
+  { name:"Verdicchio",   lon:13.15, lat:43.45, at:"start" },
+  { name:"Montalcino",   lon:11.49, lat:43.02, at:"start" },
+  { name:"Montefalco",   lon:12.65, lat:42.89, at:"start" },
+  { name:"Orvieto",      lon:12.11, lat:42.72, at:"end" },
+  { name:"Abruzzo",      lon:14.00, lat:42.35, at:"start" },
+  { name:"Frascati",     lon:12.68, lat:41.80, at:"end" },
+  { name:"Taurasi",      lon:14.97, lat:40.99, at:"start", dy:-1.2 },
+  { name:"Vulture",      lon:15.62, lat:40.95, at:"start", dy:2.4 },
+  { name:"Salento",      lon:17.95, lat:40.35, at:"end" },
+  { name:"Cannonau",     lon:9.30,  lat:40.10, at:"start" },
+  { name:"Marsala",      lon:12.55, lat:37.80, at:"start", dy:-1.2 },
+  { name:"Etna",         lon:15.00, lat:37.75, at:"start" },
+];
+
+/** A few cities, purely so people can find themselves on the map. */
+const CITIES = [
+  { name:"Torino",  lon:7.69,  lat:45.07, at:"start" },
+  { name:"Milano",  lon:9.19,  lat:45.46, at:"end" },
+  { name:"Venezia", lon:12.33, lat:45.44, at:"start" },
+  { name:"Firenze", lon:11.25, lat:43.77, at:"end" },
+  { name:"Roma",    lon:12.50, lat:41.90, at:"start" },
+  { name:"Napoli",  lon:14.25, lat:40.85, at:"end" },
+  { name:"Bari",    lon:16.87, lat:41.12, at:"start" },
+  { name:"Palermo", lon:13.36, lat:38.12, at:"end" },
+];
+
+const params = new URLSearchParams(location.search);
+let named  = params.get("regions") !== "0";
+let copies = Math.min(20, Math.max(1, parseInt(params.get("copies"), 10) || 1));
+
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+const r2 = (n) => Math.round(n * 100) / 100;
+
+const project = (lon, lat) => [
+  MAP.x + (lon - MAP.lon0) / (MAP.lon1 - MAP.lon0) * MAP.w,
+  MAP.y + (lat - MAP.lat0) / (MAP.lat1 - MAP.lat0) * MAP.h,
+];
+
+function marks(list, cls, r, size){
+  return list.map((p) => {
+    const [x, y] = project(p.lon, p.lat);
+    const away = p.at === "end" ? -1 : 1;
+    return `<circle class="${cls}-dot" cx="${r2(x)}" cy="${r2(y)}" r="${r}"/>`
+         + `<text class="${cls}" x="${r2(x + away * (r + 1.1))}" y="${r2(y + (p.dy || 0) + 0.9)}"`
+         + ` text-anchor="${p.at}" font-size="${size}">${esc(p.name)}</text>`;
+  }).join("");
+}
+
+function sheetSVG(){
+  const { size: s, inset: i } = REG;
+  return `
+<svg viewBox="0 0 ${SHEET.w} ${SHEET.h}" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text{ font-family:"IBM Plex Sans", sans-serif; fill:#241A15; }
+    .title{ font-family:"Fraunces", Georgia, serif; font-weight:600; font-size:7.4px; }
+    .sub{ font-size:2.9px; fill:#6B5A4E; }
+    .lead{ font-family:"IBM Plex Mono", monospace; font-size:2.5px; letter-spacing:.14px; fill:#6B5A4E; }
+    .frame{ fill:none; stroke:#241A15; stroke-width:.4; }
+    .region{ font-size:2.9px; font-weight:600; fill:#6E1327; }
+    .region-dot{ fill:#6E1327; }
+    .city{ font-size:2.5px; fill:#6B5A4E; }
+    .city-dot{ fill:none; stroke:#6B5A4E; stroke-width:.35; }
+    .note{ font-size:2.8px; fill:#6B5A4E; }
+  </style>
+
+  <rect x="0" y="0" width="${SHEET.w}" height="${SHEET.h}" fill="#FFFFFF"/>
+
+  <!-- registration marks: the scanner finds these four and rectifies to mm.
+       Keep the tracing paper clear of them. -->
+  <rect x="${i}" y="${i}" width="${s}" height="${s}" fill="#241A15"/>
+  <rect x="${SHEET.w - i - s}" y="${i}" width="${s}" height="${s}" fill="#241A15"/>
+  <rect x="${i}" y="${SHEET.h - i - s}" width="${s}" height="${s}" fill="#241A15"/>
+  <rect x="${SHEET.w - i - s}" y="${SHEET.h - i - s}" width="${s}" height="${s}" fill="#241A15"/>
+
+  <text class="title" x="${MAP.x}" y="18">Where in Italy?</text>
+  <text class="sub" x="${MAP.x + MAP.w}" y="18" text-anchor="end">One dot, on your own square of tracing paper</text>
+
+  <image href="relief-italy.png" x="${MAP.x}" y="${MAP.y}" width="${MAP.w}" height="${MAP.h}"
+         preserveAspectRatio="none"/>
+  <rect class="frame" x="${MAP.x}" y="${MAP.y}" width="${MAP.w}" height="${MAP.h}"/>
+
+  ${marks(CITIES, "city", 0.7, 2.5)}
+  ${named ? marks(REGIONS, "region", 0.9, 2.9) : ""}
+
+  <text class="note" x="${MAP.x}" y="${MAP.y + MAP.h + 7}">
+    <tspan font-weight="600">Fill the dot in properly</tspan> — three or four millimetres across and dark. A faint ring will not read.
+  </text>
+  <text class="note" x="${MAP.x}" y="${MAP.y + MAP.h + 12}">
+    <tspan font-weight="600">Do not move the paper</tspan> until it has been photographed, and keep it clear of the four corner squares.
+  </text>
+  <text class="note" x="${MAP.x}" y="${MAP.y + MAP.h + 17}">
+    ${named ? "Named regions are a hint, not a list of answers — the wine may come from between them."
+            : "No names on this one. Go on instinct."}
+  </text>
+  <text class="lead" x="${MAP.x}" y="${SHEET.h - 12}">WINE FLIGHT · MAP ROUND · ITALY</text>
+</svg>`;
+}
+
+function render(){
+  const one = sheetSVG();
+  document.getElementById("sheets").innerHTML =
+    Array.from({ length: copies }, () => `<div class="sheet">${one}</div>`).join("");
+  document.getElementById("count").textContent =
+    `${copies} ${copies === 1 ? "sheet" : "sheets"} of A4 portrait`;
+}
+
+const copyPicker = document.getElementById("copies");
+copyPicker.innerHTML = Array.from({ length: 20 }, (_, n) =>
+  `<option value="${n + 1}"${n + 1 === copies ? " selected" : ""}>${n + 1}</option>`).join("");
+copyPicker.addEventListener("change", (e) => {
+  copies = parseInt(e.target.value, 10);
+  const u = new URL(location.href); u.searchParams.set("copies", copies);
+  history.replaceState(null, "", u);
+  render();
+});
+
+const regionPicker = document.getElementById("regions");
+regionPicker.value = named ? "1" : "0";
+regionPicker.addEventListener("change", (e) => {
+  named = e.target.value === "1";
+  const u = new URL(location.href); u.searchParams.set("regions", named ? "1" : "0");
+  history.replaceState(null, "", u);
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

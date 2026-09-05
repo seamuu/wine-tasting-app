@@ -183,6 +183,27 @@ export default function SetupTab({ event }: { event: EventRow }) {
         </div>
 
         <div className="card">
+          <div className="section-title">Map round</div>
+          <p className="small" style={{ marginBottom: ".8rem" }}>
+            One A4 map of Italy with shaded relief and the wine regions marked. Give everyone a
+            small square of tracing paper: they slide it over their guess, mark one dot, and it
+            gets photographed in place. Print one map, or one each so nobody has to queue.
+          </p>
+          <div className="row">
+            <a className="btn" href="/map.html" target="_blank" rel="noreferrer">
+              Open the map ↗
+            </a>
+            <a className="btn btn-quiet" href="/map.html?regions=0" target="_blank" rel="noreferrer">
+              Unlabelled version ↗
+            </a>
+          </div>
+          <p className="small" style={{ marginTop: ".7rem" }}>
+            Reading the dots isn&rsquo;t wired up yet — the sheet carries the same corner marks as
+            the tasting card, so it&rsquo;s ready for it, but for now the map round is scored by eye.
+          </p>
+        </div>
+
+        <div className="card">
           <div className="section-title">Ready?</div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             <Check done={guests > 0 && !overCapacity} warn={overCapacity}>
