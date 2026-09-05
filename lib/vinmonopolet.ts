@@ -56,6 +56,73 @@ export function isPoletUrl(url: string): boolean {
   } catch { return false; }
 }
 
+export type PoletHit = {
+  code: string;
+  name: string;
+  url: string;
+  priceNok?: number;
+  alcohol?: number;
+  category?: string;   // "Rødvin", "Hvitvin", ...
+  district?: string;
+  volumeCl?: number;
+  thumb?: string;
+  side?: "RED" | "WHITE";
+};
+
+/**
+ * Search the Polet by name, so a wine can be added without leaving the app.
+ *
+ * This is the storefront's own search endpoint — the one their website calls —
+ * and it needs no key. Their documented API does, and asking the host to
+ * register for one to look up a bottle is a worse trade than depending on this.
+ * If it ever stops answering, pasting a product link still works.
+ */
+export async function searchPolet(query: string, limit = 8): Promise<PoletHit[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const url = "https://www.vinmonopolet.no/vmpws/v2/vmp/products/search"
+    + `?query=${encodeURIComponent(q)}&pageSize=${Math.min(24, limit)}`;
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+      "Accept": "application/json",
+      "Accept-Language": "nb-NO,nb;q=0.9,en;q=0.8",
+    },
+    next: { revalidate: 60 * 60 },
+  });
+  if (!res.ok) throw new Error(`Vinmonopolet search returned ${res.status}`);
+
+  const data = await res.json() as { products?: Record<string, unknown>[] };
+  const val = (o: unknown) => (o && typeof o === "object" && "value" in o
+    ? Number((o as { value: unknown }).value) : undefined);
+  const nameOf = (o: unknown) => (o && typeof o === "object" && "name" in o
+    ? String((o as { name: unknown }).name) : undefined);
+
+  return (data.products ?? []).slice(0, limit).map((p) => {
+    const category = nameOf(p.main_category);
+    return {
+      code: String(p.code ?? ""),
+      name: String(p.name ?? "Unnamed"),
+      // the listing gives a site-relative path that already ends in /p/<code>
+      url: `https://www.vinmonopolet.no${String(p.url ?? "")}`,
+      priceNok: val(p.price),
+      alcohol: val(p.alcohol),
+      category,
+      district: nameOf(p.district),
+      volumeCl: val(p.volume),
+      thumb: Array.isArray(p.images) && p.images[0] && typeof p.images[0] === "object"
+        ? String((p.images[0] as { url?: unknown }).url ?? "") || undefined
+        : undefined,
+      // enough to pre-pick the right side of the card; the host can override
+      side: (category === "Rødvin" ? "RED"
+        : category && /hvitvin|musserende|rosé|rosevin/i.test(category) ? "WHITE"
+        : undefined) as PoletHit["side"],
+    };
+  }).filter((h) => h.code);
+}
+
 export async function fetchPolet(url: string): Promise<PoletWine> {
   if (!isPoletUrl(url)) throw new Error("That is not a vinmonopolet.no link");
   const res = await fetch(url, {

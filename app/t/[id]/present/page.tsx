@@ -36,6 +36,7 @@ export default async function PresentPage({ params, searchParams }: {
     priceNok: unknown; producer: string | null; vintage: number | null;
     region: string | null; appellation: string | null; grapes: string | null;
     tastingNote: string | null; teaser: string | null;
+    alcohol: unknown; sugarGl: unknown; acidGl: unknown;
   })[];
 
   const slides: Slide[] = [
@@ -63,6 +64,9 @@ export default async function PresentPage({ params, searchParams }: {
           region={wine.appellation ?? wine.region}
           grapes={wine.grapes}
           note={wine.tastingNote}
+          alcohol={wine.alcohol}
+          sugarGl={wine.sugarGl}
+          acidGl={wine.acidGl}
         />
       ),
     });

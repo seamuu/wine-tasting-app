@@ -1,6 +1,7 @@
-import { addWine, updateWine, deleteWine, setStage } from "../../actions";
+import { updateWine, deleteWine, setStage } from "../../actions";
 import { PRICE_BUCKETS, POSITIONS } from "@/lib/card";
 import { categoriesFor, TIERS, TIER_BLURB } from "@/lib/flavours";
+import AddWine from "./AddWine";
 
 type Wine = {
   id: string; position: string; side: string; stage: string;
@@ -46,7 +47,6 @@ export default function WinesTab({ event }: { event: { id: string; wineCount: nu
   const used = new Set(event.wines.map((w) => w.position));
   // only offer letters the printed card actually has
   const letters = POSITIONS.slice(0, event.wineCount);
-  const free = letters.filter((p) => !used.has(p));
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,360px)", gap: "2.5rem", alignItems: "start" }}>
@@ -201,49 +201,7 @@ export default function WinesTab({ event }: { event: { id: string; wineCount: nu
         )}
       </section>
 
-      <section className="card">
-        <div className="section-title">Add a wine</div>
-        <form action={addWine} className="stack" style={{ gap: "1rem" }}>
-          <input type="hidden" name="eventId" value={event.id} />
-
-          <label className="field">
-            <span className="label">Vinmonopolet link</span>
-            <input type="url" name="sourceUrl" placeholder="https://www.vinmonopolet.no/…/p/838901" />
-            <span className="small">
-              Fills in the price, alcohol, sugar, acid, grapes and their tasting note — and the price
-              round then scores itself.
-            </span>
-          </label>
-
-          <label className="field">
-            <span className="label">Or just a name</span>
-            <input type="text" name="name" placeholder="The orange one Kristian brought" />
-            <span className="small">
-              Fine on its own. You lose the automatic price answer, so set that bucket yourself.
-            </span>
-          </label>
-
-          <div className="row" style={{ gap: ".6rem" }}>
-            <label className="field" style={{ flex: 1 }}>
-              <span className="label">Letter</span>
-              <select name="position" defaultValue={free[0] ?? letters[0]}>
-                {letters.map((p) => (
-                  <option key={p} value={p}>{p}{used.has(p) ? " — replaces what's there" : ""}</option>
-                ))}
-              </select>
-            </label>
-            <label className="field" style={{ flex: 1 }}>
-              <span className="label">Side of the card</span>
-              <select name="side" defaultValue="RED">
-                <option value="WHITE">White</option>
-                <option value="RED">Red</option>
-              </select>
-            </label>
-          </div>
-
-          <button className="btn btn-primary" type="submit">Add to the flight</button>
-        </form>
-      </section>
+      <AddWine eventId={event.id} letters={letters} used={[...used]} />
     </div>
   );
 }

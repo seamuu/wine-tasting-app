@@ -1,5 +1,6 @@
 import { PRICE_BUCKETS, splitFlavour } from "@/lib/card";
 import { scoreWine, hasKey } from "@/lib/scoring";
+import { dossier } from "@/lib/dossier";
 import {
   consensus, leaderboard, mean, ratingHistogram, superlatives,
   tasterLabel, wheelData, type WineRow,
@@ -41,10 +42,12 @@ export function Opening({ name, wines, tasters }: { name: string; wines: number;
 
 // ------------------------------------------------------------------- reveal
 
-export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, grapes, note }: {
+export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, grapes, note,
+                         alcohol, sugarGl, acidGl }: {
   wine: WineRow; revealMode: string;
   priceNok: unknown; producer: string | null; vintage: number | null;
   region: string | null; grapes: string | null; note: string | null;
+  alcohol: unknown; sugarGl: unknown; acidGl: unknown;
 }) {
   const subs = wine.submissions;
   const ratings = subs.map((s) => s.rating).filter((n): n is number => n != null);
@@ -69,20 +72,50 @@ export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, 
   const rightGuesses = wine.priceBucket == null ? null
     : subs.filter((s) => s.priceBucket === wine.priceBucket).length;
 
+  const story = dossier({
+    name: wine.name, grapes, appellation: null, region, country: null,
+    alcohol, sugarGl, acidGl, tastingNote: note,
+  });
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.35fr) minmax(0,1fr)", alignItems: "stretch" }}>
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: ".5rem", minWidth: 0 }}>
-        <div className="deck-label">Wine {wine.position} · {wine.side === "RED" ? "red" : "white"}</div>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: ".45rem", minWidth: 0 }}>
+        <div className="deck-label">
+          Wine {wine.position} · {wine.side === "RED" ? "red" : "white"}{story.style ? ` · ${story.style}` : ""}
+        </div>
         <h1 className="deck-title">{wine.name}</h1>
         <p className="deck-sub">
           {[producer, vintage, region].filter(Boolean).join(" · ")}
         </p>
         {grapes && <p className="deck-sub" style={{ fontSize: "clamp(.75rem,1.6vh,1rem)" }}>{grapes}</p>}
         {note && (
-          <p className="deck-sub serif" style={{ fontStyle: "italic", marginTop: ".4rem", maxWidth: "48ch",
+          <p className="deck-sub serif" style={{ fontStyle: "italic", maxWidth: "48ch",
                                                  fontSize: "clamp(.78rem,1.8vh,1.05rem)" }}>
             &ldquo;{note}&rdquo;
           </p>
+        )}
+
+        {story.expect.length > 0 && (
+          <div style={{ marginTop: ".5rem" }}>
+            <span className="deck-label">What to expect</span>
+            <div className="row" style={{ gap: ".3rem", marginTop: ".3rem" }}>
+              {story.expect.map((a) => (
+                <span key={a} className="pill" style={{ fontSize: "clamp(.68rem,1.5vh,.82rem)" }}>{a}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* every line traceable to something the listing actually says */}
+        {story.facts.length > 0 && (
+          <div style={{ marginTop: ".6rem", display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: ".2rem 1.4rem" }}>
+            {story.facts.map((f) => (
+              <p key={f.head} className="small" style={{ fontSize: "clamp(.7rem,1.55vh,.87rem)", lineHeight: 1.45 }}>
+                <b style={{ color: "var(--ink)" }}>{f.head}</b> — {f.body}
+              </p>
+            ))}
+          </div>
         )}
       </div>
 
