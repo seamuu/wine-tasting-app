@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name Cards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* Ten to an A4 sheet, so a full set of twenty is exactly two sheets. The
+     cards are cut apart on the dashed lines and dealt out at the door — one
+     each, and that is who you are for the night. */
+  :root{
+    --paper:#F7F2E9; --paper-2:#FFFDF8; --ink:#241A15; --ink-soft:#6B5A4E;
+    --rule:#DED2C0; --claret:#6E1327; --gold:#A8843C;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{ background:var(--paper); color:var(--ink);
+        font-family:"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+
+  .chrome{ max-width:1000px; margin:0 auto; padding:2.2rem 1.25rem 1rem; }
+  .kicker{ font-family:"IBM Plex Mono",monospace; font-size:.72rem; letter-spacing:.18em;
+           text-transform:uppercase; color:var(--claret); }
+  h1{ font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:2.4rem; margin:.2rem 0 .5rem; }
+  .lede{ color:var(--ink-soft); line-height:1.6; max-width:60ch; margin:0 0 1.2rem; }
+  .toolbar{ display:flex; gap:.6rem; flex-wrap:wrap; align-items:center; margin-bottom:1.6rem; }
+  .btn{ font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; border-radius:999px;
+        padding:.55rem 1.15rem; border:1px solid var(--rule); background:var(--paper-2);
+        color:var(--ink); display:inline-flex; align-items:center; gap:.5rem; }
+  .btn-primary{ background:var(--claret); border-color:var(--claret); color:#F0E2E2; }
+  select{ font:inherit; font-size:.82rem; font-weight:600; border:0; background:transparent;
+          color:inherit; cursor:pointer; }
+  .count{ color:var(--ink-soft); font-size:.85rem; }
+  .note{ background:#FBF2DF; border:1px solid #8A5A00; color:#8A5A00; border-radius:8px;
+         padding:.85rem 1rem; font-size:.87rem; line-height:1.55; max-width:60ch; margin:0 0 1.4rem; }
+  [hidden]{ display:none !important; }
+
+  /* ---- the sheet ---- */
+  .sheet{
+    width:210mm; height:297mm; background:#fff; margin:0 auto 8mm;
+    display:grid; grid-template-columns:repeat(2,105mm); grid-template-rows:repeat(5,59.4mm);
+    box-shadow:0 12px 28px -18px rgba(60,40,30,.4);
+  }
+  /* single words need half the width, so twice as many fit */
+  .sheet.split{ grid-template-columns:repeat(4,52.5mm); }
+  .sheet.split .namecard{ padding:6mm; }
+  .sheet.split .namecard:nth-child(2n){ border-right:.2mm dashed #C9C2BA; }
+  .sheet.split .namecard:nth-child(4n){ border-right:0; }
+  .sheet.split .namecard:nth-last-child(-n+2){ border-bottom:.2mm dashed #C9C2BA; }
+  .sheet.split .namecard:nth-last-child(-n+4){ border-bottom:0; }
+  .word{ font-family:"Fraunces",Georgia,serif; font-weight:600; font-size:8mm; line-height:1.05;
+         letter-spacing:-.01em; }
+  .word-kind{ font-family:"IBM Plex Mono",monospace; font-size:2.1mm; letter-spacing:.14em;
+              text-transform:uppercase; color:var(--claret); }
+  .namecard{
+    border-right:.2mm dashed #C9C2BA; border-bottom:.2mm dashed #C9C2BA;
+    padding:9mm 10mm; display:flex; flex-direction:column; justify-content:space-between;
+    overflow:hidden;
+  }
+  .namecard:nth-child(2n){ border-right:0; }
+  .namecard:nth-last-child(-n+2){ border-bottom:0; }
+
+  .nc-top{ display:flex; justify-content:space-between; align-items:baseline; }
+  .nc-mark{ font-family:"IBM Plex Mono",monospace; font-size:2.1mm; letter-spacing:.14em;
+            text-transform:uppercase; color:#8A8078; }
+  .nc-name{ font-family:"Fraunces",Georgia,serif; font-weight:600; line-height:1.02;
+            font-size:11mm; letter-spacing:-.01em; }
+  .nc-name small{ display:block; font-size:5.4mm; font-weight:500; color:var(--claret); }
+  .nc-foot{ font-size:2.6mm; line-height:1.45; color:var(--ink-soft); }
+  .nc-foot b{ color:var(--ink); }
+
+  @media print{
+    @page{ size:A4; margin:0; }
+    .chrome{ display:none; }
+    body{ background:#fff; }
+    .sheet{ box-shadow:none; margin:0; page-break-after:always; break-after:page; }
+    .sheet:last-child{ page-break-after:auto; break-after:auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="kicker">Wine Flight · name cards</div>
+  <h1>Who is everyone?</h1>
+  <p class="lede" id="lede"></p>
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="window.print()">Print</button>
+    <label class="btn" style="cursor:pointer;">
+      <span style="font-weight:400;color:var(--ink-soft);font-size:.78rem;">Names</span>
+      <select id="idset"></select>
+    </label>
+    <label class="btn" style="cursor:pointer;">
+      <span style="font-weight:400;color:var(--ink-soft);font-size:.78rem;">Style</span>
+      <select id="mode">
+        <option value="pairs">One card each</option>
+        <option value="split">Pick your own two</option>
+      </select>
+    </label>
+    <span class="count" id="count"></span>
+  </div>
+  <p class="note" id="warn" hidden>
+    <b>Two people must not end up with the same pair.</b> Their cards would be filed as one
+    person and both their scores would be wrong. Say it out loud as people choose — &ldquo;anyone
+    else a Feral Bear?&rdquo; — or use <b>One card each</b>, where it can&rsquo;t happen.
+  </p>
+</div>
+
+<div id="sheets"></div>
+
+<script>
+  // Kept in step with public/card-v2.html and lib/card.ts by `npm run check:vocab`.
+  const ID_SETS = {
+    house:   { label:"Skinny / Twink", a:["Skinny","Hot","Ugly","Annoying","Hairy"],
+                                       b:["Twink","Bear","Dyke","Mommy"] },
+    colours: { label:"Colours + animals", a:["Red","Orange","Yellow","Green","Blue"],
+                                          b:["Fox","Owl","Bear","Wolf"] },
+    vibes:   { label:"Vibes / Twink", a:["Chaotic","Smug","Feral","Serene","Messy"],
+                              b:["Twink","Bear","Dyke","Mommy"] },
+    plants:  { label:"Plants", a:["Cactus","Fern","Ivy","Moss","Thistle"],
+                               b:["Root","Leaf","Bud","Thorn"] },
+  };
+
+  const params = new URLSearchParams(location.search);
+  let idSet = ID_SETS[params.get("ids")] ? params.get("ids") : "house";
+  let mode = params.get("mode") === "split" ? "split" : "pairs";
+
+  function pairs(set){
+    // noun-major, so each sheet holds whole groups rather than a jumble
+    const out = [];
+    for (const b of set.b) for (const a of set.a) out.push([a, b]);
+    return out;
+  }
+
+  /**
+   * Split mode prints the two halves as separate decks so people can pick both.
+   * Enough copies that every combination is still buildable when the last
+   * person chooses: one of each adjective per noun, and vice versa.
+   */
+  function words(set){
+    const out = [];
+    for (let i = 0; i < set.b.length; i++) for (const a of set.a) out.push([a, "adjective"]);
+    for (let i = 0; i < set.a.length; i++) for (const b of set.b) out.push([b, "noun"]);
+    return out;
+  }
+
+  function pairHTML([a, b]){
+    return `
+      <div class="namecard">
+        <div class="nc-top">
+          <span class="nc-mark">You are</span>
+          <span class="nc-mark">Wine Flight</span>
+        </div>
+        <div class="nc-name">${a}<small>${b}</small></div>
+        <div class="nc-foot">
+          Mark <b>${a}</b> and <b>${b}</b> in the <b>You are</b> row — on every card, every wine.
+          Don&rsquo;t tell anyone which one you took.
+        </div>
+      </div>`;
+  }
+
+  function wordHTML([w, kind]){
+    return `
+      <div class="namecard">
+        <span class="word-kind">${kind === "adjective" ? "Take one" : "And one"}</span>
+        <div class="word">${w}</div>
+        <div class="nc-foot">Mark <b>${w}</b> in the <b>You are</b> row.</div>
+      </div>`;
+  }
+
+  function render(){
+    const set = ID_SETS[idSet];
+    const split = mode === "split";
+    const all = split ? words(set) : pairs(set);
+    const per = split ? 20 : 10;
+    const html = split ? wordHTML : pairHTML;
+
+    const sheets = [];
+    for (let i = 0; i < all.length; i += per){
+      const chunk = all.slice(i, i + per);
+      // pad the last sheet so the dashed grid stays square
+      while (chunk.length < per) chunk.push(null);
+      sheets.push(`<div class="sheet${split ? " split" : ""}">${
+        chunk.map(c => c ? html(c) : '<div class="namecard"></div>').join("")
+      }</div>`);
+    }
+    document.getElementById("sheets").innerHTML = sheets.join("");
+    document.getElementById("count").textContent =
+      `${all.length} cards · ${sheets.length} ${sheets.length === 1 ? "sheet" : "sheets"} of A4`;
+    document.getElementById("warn").hidden = !split;
+    document.getElementById("lede").innerHTML = split
+      ? `Nobody writes their name on a tasting card — they mark two bubbles instead. Here the two
+         halves are printed separately, so people pick their own: one word from each deck. Cut
+         them up and lay them out in two piles.`
+      : `Nobody writes their name on a tasting card — they mark two bubbles instead. These are
+         those two bubbles, one pair to a card. Cut them up, shuffle, and let people take one as
+         they arrive — every pair is different, so nobody can clash.`;
+  }
+
+  const modePicker = document.getElementById("mode");
+  modePicker.value = mode;
+  modePicker.addEventListener("change", e => {
+    mode = e.target.value;
+    const u = new URL(location.href);
+    u.searchParams.set("mode", mode);
+    history.replaceState(null, "", u);
+    render();
+  });
+
+  const picker = document.getElementById("idset");
+  picker.innerHTML = Object.entries(ID_SETS)
+    .map(([k,v]) => `<option value="${k}"${k===idSet?" selected":""}>${v.label}</option>`).join("");
+  picker.addEventListener("change", e => {
+    idSet = e.target.value;
+    const u = new URL(location.href);
+    u.searchParams.set("ids", idSet);
+    history.replaceState(null, "", u);   // so the print keeps the choice
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>

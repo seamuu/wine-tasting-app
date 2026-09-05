@@ -171,6 +171,18 @@ export default function SetupTab({ event }: { event: EventRow }) {
         </div>
 
         <div className="card">
+          <div className="section-title">Name cards</div>
+          <p className="small" style={{ marginBottom: ".8rem" }}>
+            {capacity} little cards, one per pair, {Math.ceil(capacity / 10)} sheets of A4. Cut
+            them up and let people take one at the door — that&rsquo;s who they are for the night.
+            There&rsquo;s also a pick-your-own version where the two halves are separate decks.
+          </p>
+          <a className="btn" href={`/names.html?ids=${event.idSet}`} target="_blank" rel="noreferrer">
+            Open the name cards ↗
+          </a>
+        </div>
+
+        <div className="card">
           <div className="section-title">Ready?</div>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             <Check done={guests > 0 && !overCapacity} warn={overCapacity}>

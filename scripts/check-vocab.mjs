@@ -36,7 +36,56 @@ function fromLib(constName) {
   return out;
 }
 
+/**
+ * The taster vocabularies live in three places — the card, the name cards, and
+ * lib/card.ts — because two are static pages and one is server code. Same deal
+ * as the flavours: check rather than trust.
+ */
+function idSets(source, label) {
+  const start = source.indexOf("ID_SETS");
+  if (start === -1) return null;
+  const block = source.slice(start, source.indexOf("\n  };", start) + 1
+    || source.indexOf("\n};", start) + 1);
+  const out = [];
+  for (const m of block.matchAll(
+    /(\w+):\s*\{\s*label:\s*"([^"]+)",\s*a:\s*\[([^\]]+)\],\s*b:\s*\[([^\]]+)\]/g)) {
+    const words = (s) => s.match(/"([^"]+)"/g).map((w) => w.slice(1, -1)).join(",");
+    out.push(`${m[1]} "${m[2]}" a=${words(m[3])} b=${words(m[4])}`);
+  }
+  return out.length ? out.join("\n") : null;
+}
+
 let failed = 0;
+
+{
+  const sources = [
+    ["public/card-v2.html", card],
+    ["public/names.html", readFileSync(join(root, "public/names.html"), "utf8")],
+    ["lib/card.ts", readFileSync(join(root, "lib/card.ts"), "utf8")],
+  ].map(([name, src]) => [name, idSets(src, name)]);
+
+  const missing = sources.filter(([, v]) => !v);
+  if (missing.length) {
+    console.error(`✗ could not parse ID_SETS in ${missing.map(([n]) => n).join(", ")}`);
+    failed = 1;
+  } else {
+    const [[refName, ref], ...rest] = sources;
+    const bad = rest.filter(([, v]) => v !== ref);
+    if (bad.length) {
+      console.error(`✗ taster vocabularies differ from ${refName}:`);
+      for (const [name, v] of bad) {
+        const a = ref.split("\n"), b = v.split("\n");
+        for (let i = 0; i < Math.max(a.length, b.length); i++) {
+          if (a[i] !== b[i]) console.error(`   ${refName}: ${a[i] ?? "—"}\n   ${name}: ${b[i] ?? "—"}`);
+        }
+      }
+      failed = 1;
+    } else {
+      console.log(`✓ taster names: ${ref.split("\n").length} sets agree across all three files`);
+    }
+  }
+}
+
 for (const [side, constName] of [["WHITE", "WHITE"], ["RED", "RED"]]) {
   const a = fromCard(side);
   const b = fromLib(constName);
