@@ -1,5 +1,6 @@
 import { addWine, updateWine, deleteWine, setStage } from "../../actions";
 import { PRICE_BUCKETS, POSITIONS } from "@/lib/card";
+import { categoriesFor, TIERS, TIER_BLURB } from "@/lib/flavours";
 
 type Wine = {
   id: string; position: string; side: string; stage: string;
@@ -11,6 +12,7 @@ type Wine = {
   priceBucket: number | null;
   keyBody: number | null; keyAcidity: number | null; keyTannin: number | null;
   keySweetness: number | null; keyAlcohol: number | null;
+  keyFlavours: string[];
   submissions: unknown[];
 };
 
@@ -40,9 +42,11 @@ function KeyScale({ name, value, label, lo, hi }: {
   );
 }
 
-export default function WinesTab({ event }: { event: { id: string; wines: Wine[] } }) {
+export default function WinesTab({ event }: { event: { id: string; wineCount: number; wines: Wine[] } }) {
   const used = new Set(event.wines.map((w) => w.position));
-  const free = POSITIONS.filter((p) => !used.has(p));
+  // only offer letters the printed card actually has
+  const letters = POSITIONS.slice(0, event.wineCount);
+  const free = letters.filter((p) => !used.has(p));
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,360px)", gap: "2.5rem", alignItems: "start" }}>
@@ -76,6 +80,7 @@ export default function WinesTab({ event }: { event: { id: string; wines: Wine[]
                     {dec(w.sugarGl) && <span className="pill">sugar {dec(w.sugarGl)} g/l</span>}
                     {dec(w.acidGl) && <span className="pill">acid {dec(w.acidGl)} g/l</span>}
                     {w.priceBucket != null && <span className="pill pill-olive">answer: {PRICE_BUCKETS[w.priceBucket]}</span>}
+                    {w.keyFlavours.length > 0 && <span className="pill pill-olive">{w.keyFlavours.length} aromas keyed</span>}
                     {w.sourceRef && <span className="pill">Polet {w.sourceRef}</span>}
                   </div>
 
@@ -124,6 +129,43 @@ export default function WinesTab({ event }: { event: { id: string; wines: Wine[]
                           <div style={{ flex: 1, minWidth: "110px" }}><KeyScale name="keyTannin" value={w.keyTannin} label="Tannin" lo="Smooth" hi="Grippy" /></div>
                           <div style={{ flex: 1, minWidth: "110px" }}><KeyScale name="keySweetness" value={w.keySweetness} label="Sweetness" lo="Dry" hi="Sweet" /></div>
                           <div style={{ flex: 1, minWidth: "110px" }}><KeyScale name="keyAlcohol" value={w.keyAlcohol} label="Alcohol" lo="Low" hi="High" /></div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="label">Aromas actually in the glass</span>
+                        <p className="small" style={{ margin: ".25rem 0 .5rem" }}>
+                          Tick what the wine really shows — six or eight is plenty. The right
+                          family with the wrong word earns half, so a near miss still counts.
+                          {w.tastingNote && " Their tasting note is quoted above."}
+                        </p>
+                        {/* tells the action this form carries the checkboxes, since
+                            "none ticked" and "not on this form" look identical */}
+                        <input type="hidden" name="keyFlavoursPresent" value="1" />
+                        <div className="stack" style={{ gap: ".8rem" }}>
+                          {TIERS.map((tier) => (
+                            <div key={tier}>
+                              <div className="small" style={{ fontSize: ".7rem", marginBottom: ".3rem" }}>
+                                <b style={{ color: "var(--ink)" }}>{tier}</b> — {TIER_BLURB[tier]}
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: ".6rem" }}>
+                                {categoriesFor(w.side).filter((c) => c.tier === tier).map((c) => (
+                                  <div key={c.name}>
+                                    <div className="small" style={{ fontSize: ".68rem", marginBottom: ".15rem" }}>{c.name}</div>
+                                    <div className="chips">
+                                      {c.options.map((o) => (
+                                        <label key={o} className="chip chip-wide">
+                                          <input type="checkbox" name="keyFlavours" value={`${c.name}|${o}`}
+                                                 defaultChecked={w.keyFlavours.includes(`${c.name}|${o}`)} />
+                                          <span>{o}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
@@ -184,9 +226,9 @@ export default function WinesTab({ event }: { event: { id: string; wines: Wine[]
           <div className="row" style={{ gap: ".6rem" }}>
             <label className="field" style={{ flex: 1 }}>
               <span className="label">Letter</span>
-              <select name="position" defaultValue={free[0] ?? "A"}>
-                {POSITIONS.map((p) => (
-                  <option key={p} value={p}>{p}{used.has(p) ? " (replace)" : ""}</option>
+              <select name="position" defaultValue={free[0] ?? letters[0]}>
+                {letters.map((p) => (
+                  <option key={p} value={p}>{p}{used.has(p) ? " — replaces what's there" : ""}</option>
                 ))}
               </select>
             </label>

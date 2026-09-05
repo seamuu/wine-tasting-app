@@ -193,6 +193,10 @@
         <span style="font-weight:400;color:var(--chrome-muted);font-size:.78rem;">Taster names</span>
         <select id="idset" style="font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
       </label>
+      <label class="btn btn-ghost" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <span style="font-weight:400;color:var(--chrome-muted);font-size:.78rem;">Wines</span>
+        <select id="winecount" style="font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
+      </label>
       <span class="btn btn-ghost" style="cursor:default;">Structure — 1–5 · Rating — 1–10</span>
     </div>
 
@@ -269,6 +273,13 @@
   const params = new URLSearchParams(location.search);
   let idSet = ID_SETS[params.get("ids")] ? params.get("ids") : "house";
 
+  // How many wines are in the flight. All the letters stay in ONE .id-group:
+  // the scanner treats each group as a single question, so splitting them would
+  // make it read only the first group and never see the later letters.
+  const ALL_LETTERS = ["A","B","C","D","E","F","G","H"];
+  let wineCount = Math.min(8, Math.max(2, parseInt(params.get("wines"), 10) || 4));
+  let WINE_LETTERS = ALL_LETTERS.slice(0, wineCount);
+
   function sheetHTML(side){
     const isWhite = side === "white";
     const ids = ID_SETS[idSet];
@@ -290,7 +301,7 @@
         </div>
         <div class="id-row">
           <span class="id-lead">Wine</span>
-          <div class="id-group">${["A","B","C","D"].map(c=>`<div class="id-item"><span class="bubble"></span><span>${c}</span></div>`).join("")}</div>
+          <div class="id-group">${WINE_LETTERS.map(c=>`<div class="id-item"><span class="bubble"></span><span>${c}</span></div>`).join("")}</div>
         </div>
         <div class="side-banner">
           <div class="side-lead">
@@ -414,6 +425,19 @@
     const u = new URL(location.href);
     u.searchParams.set("ids", idSet);
     history.replaceState(null, "", u);      // so the print/PDF keeps the choice
+    renderAll();
+  });
+
+  const winePicker = document.getElementById("winecount");
+  winePicker.innerHTML = ALL_LETTERS.map((_, i) => i + 1)
+    .filter(n => n >= 2)
+    .map(n => `<option value="${n}"${n===wineCount?" selected":""}>${n} (A–${ALL_LETTERS[n-1]})</option>`).join("");
+  winePicker.addEventListener("change", e => {
+    wineCount = parseInt(e.target.value, 10);
+    WINE_LETTERS = ALL_LETTERS.slice(0, wineCount);
+    const u = new URL(location.href);
+    u.searchParams.set("wines", String(wineCount));
+    history.replaceState(null, "", u);
     renderAll();
   });
 

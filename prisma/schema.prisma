@@ -21,6 +21,10 @@ enum FlightPosition {
   B
   C
   D
+  E
+  F
+  G
+  H
 }
 
 enum WineSide {
@@ -46,6 +50,7 @@ enum WineStage {
 enum ScanStatus {
   NEEDS_REVIEW // something was ambiguous or contradictory
   CONFIRMED
+  MANUAL // typed in by the host because the card would not read
 }
 
 model Event {
@@ -56,6 +61,12 @@ model Event {
   revealMode RevealMode @default(BLIND)
   cardVersion String    @default("card-v2")
   createdAt  DateTime   @default(now())
+
+  // Both are printed onto the card and so must be settled before the pack is
+  // run off: wineCount decides how many letters appear in the Wine row, and
+  // guestCount is what "everyone's card is in" is measured against.
+  wineCount  Int        @default(4)
+  guestCount Int?
 
   wines       Wine[]
   tasters     Taster[]

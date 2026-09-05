@@ -49,8 +49,15 @@ export const ID_SETS: Record<string, { label: string; a: string[]; b: string[] }
   },
 };
 
-export const POSITIONS = ["A", "B", "C", "D"] as const;
+/** The card prints one bubble per wine, so the flight can be up to eight long. */
+export const POSITIONS = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
 export type Position = (typeof POSITIONS)[number];
+
+/** How many A4 sheets a pack needs: one card per guest per wine, two up, duplex. */
+export function printMath(guests: number, wines: number) {
+  const cards = guests * wines;
+  return { cards, sheets: Math.ceil(cards / 2) };
+}
 
 /** A flavour is stored as "Category|Option", matching the card's own wording. */
 export function splitFlavour(f: string): { category: string; option: string } {

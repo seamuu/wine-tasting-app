@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { bucketForPrice } from "@/lib/card";
+import { bucketForPrice, POSITIONS, type Position } from "@/lib/card";
 import { fetchPolet, draftKey } from "@/lib/vinmonopolet";
 
 const str = (v: FormDataEntryValue | null) => {
@@ -28,6 +28,30 @@ export async function createEvent(form: FormData) {
   redirect(`/t/${event.id}`);
 }
 
+/**
+ * Setup changes. Three of these — the vocabulary, the number of wines and the
+ * card version — are printed onto paper, so changing them after the pack is run
+ * off invalidates it. The setup screen says so; nothing here blocks it, because
+ * "I printed the wrong thing and need to fix it" is the likelier case.
+ */
+export async function updateEvent(form: FormData) {
+  const id = String(form.get("eventId"));
+  const wineCount = int(form.get("wineCount"));
+  await prisma.event.update({
+    where: { id },
+    data: {
+      name: str(form.get("name")),
+      idSet: str(form.get("idSet")),
+      revealMode: form.get("revealMode") == null
+        ? undefined
+        : str(form.get("revealMode")) === "OPEN" ? "OPEN" : "BLIND",
+      wineCount: wineCount == null ? undefined : Math.min(8, Math.max(2, wineCount)),
+      guestCount: form.get("guestCount") == null ? undefined : (int(form.get("guestCount")) ?? null),
+    },
+  });
+  revalidatePath(`/t/${id}`, "layout");
+}
+
 export async function deleteEvent(form: FormData) {
   const id = str(form.get("eventId"));
   if (id) await prisma.event.delete({ where: { id } });
@@ -42,7 +66,8 @@ export async function deleteEvent(form: FormData) {
  */
 export async function addWine(form: FormData) {
   const eventId = String(form.get("eventId"));
-  const position = (str(form.get("position")) ?? "A") as "A" | "B" | "C" | "D";
+  const asked = str(form.get("position")) ?? "A";
+  const position = (POSITIONS.includes(asked as Position) ? asked : "A") as Position;
   const side = str(form.get("side")) === "RED" ? "RED" : "WHITE";
   const url = str(form.get("sourceUrl"));
 
@@ -93,35 +118,41 @@ export async function addWine(form: FormData) {
     update: { side, ...data },
   });
 
-  revalidatePath(`/t/${eventId}`);
+  revalidatePath(`/t/${eventId}`, "layout");
   if (lookupError) redirect(`/t/${eventId}?tab=wines&lookup=failed`);
 }
 
+/**
+ * Only writes fields the submitted form actually carried. An HTML form sends
+ * nothing for an unticked checkbox and nothing for an input it doesn't contain,
+ * so a partial form — the aroma key on its own, say — would otherwise blank the
+ * producer and flip the wine's side to white on its way past.
+ */
 export async function updateWine(form: FormData) {
   const id = String(form.get("wineId"));
-  const wine = await prisma.wine.update({
-    where: { id },
-    data: {
-      name: str(form.get("name")),
-      producer: str(form.get("producer")) ?? null,
-      vintage: int(form.get("vintage")) ?? null,
-      teaser: str(form.get("teaser")) ?? null,
-      side: str(form.get("side")) === "RED" ? "RED" : "WHITE",
-      priceBucket: int(form.get("priceBucket")) ?? null,
-      keyBody: int(form.get("keyBody")) ?? null,
-      keyAcidity: int(form.get("keyAcidity")) ?? null,
-      keyTannin: int(form.get("keyTannin")) ?? null,
-      keySweetness: int(form.get("keySweetness")) ?? null,
-      keyAlcohol: int(form.get("keyAlcohol")) ?? null,
-    },
-  });
-  revalidatePath(`/t/${wine.eventId}`);
+
+  const data: Record<string, unknown> = {};
+  const text = (field: string) => { if (form.has(field)) data[field] = str(form.get(field)) ?? null; };
+  const whole = (field: string) => { if (form.has(field)) data[field] = int(form.get(field)) ?? null; };
+
+  if (form.has("name")) data.name = str(form.get("name")) ?? undefined; // never blank the name
+  text("producer"); text("teaser");
+  whole("vintage"); whole("priceBucket");
+  whole("keyBody"); whole("keyAcidity"); whole("keyTannin");
+  whole("keySweetness"); whole("keyAlcohol");
+  if (form.has("side")) data.side = str(form.get("side")) === "RED" ? "RED" : "WHITE";
+  // a hidden marker, because "no boxes ticked" and "no boxes on this form" look
+  // identical in the payload
+  if (form.has("keyFlavoursPresent")) data.keyFlavours = form.getAll("keyFlavours").map(String);
+
+  const wine = await prisma.wine.update({ where: { id }, data });
+  revalidatePath(`/t/${wine.eventId}`, "layout");
 }
 
 export async function deleteWine(form: FormData) {
   const id = String(form.get("wineId"));
   const wine = await prisma.wine.delete({ where: { id } });
-  revalidatePath(`/t/${wine.eventId}`);
+  revalidatePath(`/t/${wine.eventId}`, "layout");
 }
 
 /** Move a wine through upcoming → pouring → locked → revealed. */
@@ -133,12 +164,12 @@ export async function setStage(form: FormData) {
     where: { id },
     data: { stage, ...(stage === "LOCKED" ? { keyLockedAt: new Date() } : {}) },
   });
-  revalidatePath(`/t/${wine.eventId}`);
+  revalidatePath(`/t/${wine.eventId}`, "layout");
 }
 
 export type ScanPayload = {
   eventId: string;
-  winePosition: "A" | "B" | "C" | "D";
+  winePosition: Position;
   idA: string;
   idB: string;
   side: "WHITE" | "RED";
@@ -192,8 +223,59 @@ export async function saveScan(payload: ScanPayload) {
     update: values,
   });
 
-  revalidatePath(`/t/${payload.eventId}`);
+  revalidatePath(`/t/${payload.eventId}`, "layout");
   return { ok: true as const, taster: `${taster.idA} ${taster.idB}`, wine: wine.name };
+}
+
+/**
+ * The paper card, typed in. Used when a photo will not read — a crease, a
+ * shadow, a biro that skipped — and the alternative is losing the card.
+ *
+ * It goes through the same upsert as a scan, so entering one by hand and then
+ * getting the photo to work later simply replaces it, in either order.
+ */
+export async function saveManualCard(form: FormData) {
+  const eventId = String(form.get("eventId"));
+  const asked = str(form.get("winePosition")) ?? "A";
+  const position = (POSITIONS.includes(asked as Position) ? asked : "A") as Position;
+  const idA = str(form.get("idA"));
+  const idB = str(form.get("idB"));
+
+  if (!idA || !idB) redirect(`/t/${eventId}?tab=scan&manual=who`);
+
+  const wine = await prisma.wine.findUnique({
+    where: { eventId_position: { eventId, position } },
+  });
+  if (!wine) redirect(`/t/${eventId}?tab=scan&manual=nowine`);
+
+  const taster = await prisma.taster.upsert({
+    where: { eventId_idA_idB: { eventId, idA, idB } },
+    create: { eventId, idA, idB },
+    update: {},
+  });
+
+  const values = {
+    side: wine.side,
+    priceBucket: int(form.get("priceBucket")) ?? null,
+    body: int(form.get("body")) ?? null,
+    acidity: int(form.get("acidity")) ?? null,
+    tannin: int(form.get("tannin")) ?? null,
+    sweetness: int(form.get("sweetness")) ?? null,
+    alcohol: int(form.get("alcohol")) ?? null,
+    rating: int(form.get("rating")) ?? null,
+    flavours: form.getAll("flavours").map(String),
+    status: "MANUAL" as const,
+    reviewNote: null,
+  };
+
+  await prisma.submission.upsert({
+    where: { wineId_tasterId: { wineId: wine.id, tasterId: taster.id } },
+    create: { eventId, wineId: wine.id, tasterId: taster.id, ...values },
+    update: values,
+  });
+
+  revalidatePath(`/t/${eventId}`, "layout");
+  redirect(`/t/${eventId}?tab=scan&manual=saved`);
 }
 
 export async function nameTaster(form: FormData) {
@@ -202,5 +284,5 @@ export async function nameTaster(form: FormData) {
     where: { id },
     data: { name: str(form.get("name")) ?? null },
   });
-  revalidatePath(`/t/${taster.eventId}`);
+  revalidatePath(`/t/${taster.eventId}`, "layout");
 }

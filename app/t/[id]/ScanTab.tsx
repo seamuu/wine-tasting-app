@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { saveScan, type ScanPayload } from "../../actions";
+import { PRICE_BUCKETS, POSITIONS, type Position } from "@/lib/card";
+import ManualCard from "./ManualCard";
 
 type WineRow = { position: string; name: string; side: string; count: number };
 
@@ -32,7 +34,7 @@ function toPayload(eventId: string, r: ScanResult, buckets: string[]): ScanPaylo
   const you = r.groups.filter((g) => g.name.toLowerCase() === "you are");
 
   const winePos = one("wine")?.value;
-  if (typeof winePos !== "string" || !"ABCD".includes(winePos))
+  if (typeof winePos !== "string" || !POSITIONS.includes(winePos as Position))
     return { error: "No wine letter was marked, so this card can't be filed." };
   if (you.length < 2 || typeof you[0].value !== "string" || typeof you[1].value !== "string")
     return { error: "The taster bubbles weren't both marked, so this card can't be filed." };
@@ -53,7 +55,7 @@ function toPayload(eventId: string, r: ScanResult, buckets: string[]): ScanPaylo
 
   return {
     eventId,
-    winePosition: winePos as "A" | "B" | "C" | "D",
+    winePosition: winePos as Position,
     idA: you[0].value,
     idB: you[1].value,
     side: r.side === "red" ? "RED" : "WHITE",
@@ -70,10 +72,18 @@ function toPayload(eventId: string, r: ScanResult, buckets: string[]): ScanPaylo
   };
 }
 
-export default function ScanTab({ eventId, wines }: { eventId: string; wines: WineRow[] }) {
+export default function ScanTab({ eventId, wines, idSet, expected }: {
+  eventId: string;
+  wines: WineRow[];
+  idSet: { label: string; a: string[]; b: string[] };
+  expected: number | null;
+}) {
   const [log, setLog] = useState<{ ok: boolean; text: string; at: number }[]>([]);
   const [busy, setBusy] = useState(false);
-  const bucketsRef = useRef<string[]>([]);
+  // The scanner sends the buckets it read off the printed card, which is the
+  // authority. Seeding with our own copy means a message that arrives without
+  // them still files a price rather than silently scoring everyone zero.
+  const bucketsRef = useRef<string[]>([...PRICE_BUCKETS]);
 
   useEffect(() => {
     async function onMessage(ev: MessageEvent) {
@@ -117,6 +127,8 @@ export default function ScanTab({ eventId, wines }: { eventId: string; wines: Wi
             allow="camera"
           />
         </div>
+
+        <ManualCard eventId={eventId} idSet={idSet} wines={wines} />
       </section>
 
       <section className="stack" style={{ gap: "1.6rem" }}>
@@ -126,14 +138,19 @@ export default function ScanTab({ eventId, wines }: { eventId: string; wines: Wi
             <p className="small">Add a wine first, or scans will have nowhere to go.</p>
           ) : (
             <div className="stack" style={{ gap: ".5rem" }}>
-              {wines.map((w) => (
-                <div key={w.position} className="spread">
-                  <span className="small" style={{ color: "var(--ink)" }}>
-                    <b>{w.position}</b> · {w.name}
-                  </span>
-                  <span className="pill tabular">{w.count}</span>
-                </div>
-              ))}
+              {wines.map((w) => {
+                const done = expected != null && w.count >= expected;
+                return (
+                  <div key={w.position} className="spread">
+                    <span className="small" style={{ color: "var(--ink)" }}>
+                      <b>{w.position}</b> · {w.name}
+                    </span>
+                    <span className={`pill tabular ${done ? "pill-olive" : ""}`}>
+                      {expected == null ? w.count : `${w.count}/${expected}`}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -102,6 +102,65 @@ label.field { display: flex; flex-direction: column; gap: .4rem; }
         border-radius: 8px; padding: .85rem 1rem; font-size: .87rem; line-height: 1.55; }
 .note-olive { background: var(--olive-soft); border-color: var(--olive); color: var(--olive); }
 
+/* ---------- choice chips ----------
+   The manual card mirrors the paper one, so its controls read as marks you make
+   rather than form fields: the input itself is hidden and the label carries the
+   state. Keyboard focus is drawn on the label via :has(), so it is never lost. */
+.chip { position: relative; display: inline-flex; cursor: pointer; }
+.chip input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.chip span {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.9rem; padding: .3rem .55rem; border-radius: 999px;
+  border: 1px solid var(--rule); background: var(--paper-2);
+  font-size: .78rem; line-height: 1.2; color: var(--ink-soft); white-space: nowrap;
+}
+.chip:hover span { border-color: var(--ink-soft); }
+.chip:has(input:checked) span { background: var(--claret); border-color: var(--claret); color: var(--claret-soft); font-weight: 600; }
+.chip:has(input:focus-visible) span { outline: 2px solid var(--claret); outline-offset: 2px; }
+.chip-wide span { min-width: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.field-row { display: grid; grid-template-columns: 6rem 1fr; gap: .7rem; align-items: center; }
+.field-row .ends { display: flex; justify-content: space-between; font-size: .68rem; color: var(--ink-soft); }
+
+/* ---------- the present deck ----------
+   Built to never scroll. The viewport sets the height and every row inside is
+   minmax(0,1fr) with its own overflow hidden, so content shrinks to fit rather
+   than pushing the page down. Type is in vh-aware clamps for the same reason:
+   the same slide has to work on a laptop and on whatever the telly is. */
+.deck {
+  position: fixed; inset: 0; overflow: hidden;
+  background: var(--paper); color: var(--ink);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(.5rem, 1.4vh, 1.3rem);
+  padding: clamp(.9rem, 2.6vh, 2rem) clamp(1.1rem, 3.2vw, 3rem);
+}
+body:has(.deck) { overflow: hidden; }
+
+.deck-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+             border-bottom: 1.5px solid var(--ink); padding-bottom: .5rem; }
+.deck-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+             color: var(--ink-soft); font-size: clamp(.68rem, 1.4vh, .82rem); }
+.deck-body { min-height: 0; min-width: 0; display: grid; gap: clamp(.7rem, 2vw, 2rem); }
+.deck-body > * { min-height: 0; min-width: 0; }
+
+.deck-title { font-family: var(--font-display), Georgia, serif; font-weight: 600; letter-spacing: -.02em;
+              line-height: 1.02; font-size: clamp(1.8rem, 6.2vh, 4.4rem); margin: 0; text-wrap: balance; }
+.deck-sub { font-size: clamp(.85rem, 2vh, 1.25rem); color: var(--ink-soft); line-height: 1.45; margin: 0; }
+.deck-stat { font-family: var(--font-display), Georgia, serif; font-size: clamp(1.6rem, 5vh, 3.2rem); line-height: 1; }
+.deck-label { font-size: clamp(.58rem, 1.2vh, .7rem); letter-spacing: .15em; text-transform: uppercase;
+              color: var(--ink-soft); font-weight: 600; }
+
+.deck-panel { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 12px;
+              padding: clamp(.6rem, 1.6vh, 1.1rem) clamp(.7rem, 1.4vw, 1.2rem);
+              display: flex; flex-direction: column; gap: .45rem; min-height: 0; overflow: hidden; }
+
+.deck-dot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: var(--rule); }
+.deck-dot[data-on] { background: var(--claret); }
+
+.deck-letter { font-family: var(--font-display), Georgia, serif; line-height: .84;
+               font-size: clamp(5rem, 26vh, 15rem); color: var(--claret); }
+
 /* ---------- misc ---------- */
 .empty { text-align: center; padding: 3rem 1rem; color: var(--ink-soft); }
 .grid-wines { display: grid; gap: .9rem; }
