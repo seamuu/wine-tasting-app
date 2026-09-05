@@ -38,9 +38,9 @@ export const ID_SETS: Record<string, { label: string; a: string[]; b: string[] }
     b: ["Fox", "Owl", "Bear", "Wolf"],
   },
   vibes: {
-    label: "Vibes",
+    label: "Vibes / Twink",
     a: ["Chaotic", "Smug", "Feral", "Serene", "Messy"],
-    b: ["Icon", "Legend", "Menace", "Angel"],
+    b: ["Twink", "Bear", "Dyke", "Mommy"],
   },
   plants: {
     label: "Plants",
