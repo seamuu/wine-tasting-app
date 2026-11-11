@@ -13,11 +13,18 @@ export const dynamic = "force-dynamic";
  * happens next" lives on the desktop screens instead.
  */
 
+// Every step is reversible. Pouring is a thing you do to a room, not to a
+// database, and the button gets pressed on the wrong wine: without a way back
+// the big screen reveals a wine nobody has tasted yet.
 const STAGE = {
-  UPCOMING: { pill: "Not poured", next: "POURING", cta: "Pour it", tone: "" },
-  POURING: { pill: "Cards being filled in", next: "LOCKED", cta: "All cards in", tone: "pill-claret" },
-  LOCKED: { pill: "Cards in, scored", next: "REVEALED", cta: "Reveal it", tone: "pill-warn" },
-  REVEALED: { pill: "Revealed", next: null, cta: null, tone: "pill-olive" },
+  UPCOMING: { pill: "Not poured", next: "POURING", cta: "Pour it", tone: "",
+              prev: null, undo: null },
+  POURING: { pill: "Cards being filled in", next: "LOCKED", cta: "All cards in", tone: "pill-claret",
+             prev: "UPCOMING", undo: "Un-pour" },
+  LOCKED: { pill: "Cards in, scored", next: "REVEALED", cta: "Reveal it", tone: "pill-warn",
+            prev: "POURING", undo: "Back to pouring" },
+  REVEALED: { pill: "Revealed", next: null, cta: null, tone: "pill-olive",
+              prev: "LOCKED", undo: "Hide it again" },
 } as const;
 
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
@@ -92,6 +99,17 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                     <input type="hidden" name="wineId" value={wine.id} />
                     <input type="hidden" name="stage" value={stage.next} />
                     <button className={`btn ${isActive ? "btn-primary" : ""}`} type="submit">{stage.cta}</button>
+                  </form>
+                )}
+
+                {stage.prev && (
+                  <form action={setStage}>
+                    <input type="hidden" name="wineId" value={wine.id} />
+                    <input type="hidden" name="stage" value={stage.prev} />
+                    <button className="btn btn-sm" type="submit"
+                            title="Nothing is lost — the cards already scanned stay attached to this wine.">
+                      {stage.undo}
+                    </button>
                   </form>
                 )}
               </div>

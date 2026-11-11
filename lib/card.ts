@@ -13,16 +13,21 @@ export const PRICE_BUCKETS = [
   "250–269", "270–289", "290–309", "310–329", "330–349", "350+",
 ] as const;
 
-/** Lower/upper bound of each bucket in kroner; the last one is open-ended. */
-const BUCKET_BOUNDS: [number, number][] = [
-  [0, 149], [150, 169], [170, 189], [190, 209], [210, 229], [230, 249],
-  [250, 269], [270, 289], [290, 309], [310, 329], [330, 349], [350, Infinity],
+/**
+ * Where each bucket starts, in kroner. Only the lower bound is written down:
+ * the printed label says "270-289" but the bucket really runs to 289.99, and
+ * spelling both ends out left gaps at every boundary - a 289,90 bottle matched
+ * no bucket at all and fell through to "350+", quietly scoring the price round
+ * against the wrong answer.
+ */
+const BUCKET_FLOORS: number[] = [
+  0, 150, 170, 190, 210, 230, 250, 270, 290, 310, 330, 350,
 ];
 
 /** Which bucket a real price falls in — this is how the price round is scored. */
 export function bucketForPrice(nok: number): number {
-  const i = BUCKET_BOUNDS.findIndex(([lo, hi]) => nok >= lo && nok <= hi);
-  return i === -1 ? PRICE_BUCKETS.length - 1 : i;
+  for (let i = BUCKET_FLOORS.length - 1; i > 0; i--) if (nok >= BUCKET_FLOORS[i]) return i;
+  return 0;
 }
 
 /** The taster vocabularies the card can be printed with. 5 × 4 = 20 people. */

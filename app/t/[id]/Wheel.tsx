@@ -31,13 +31,24 @@ const R_RING2 = 276;
  * nothing is hidden by the smoothing.
  */
 const FALLOFF = [0.18, 0.42, 0.72, 1, 0.72, 0.42, 0.18];
-function smooth(values: number[]): number[] {
+/**
+ * `family` marks which flavour family each spoke belongs to. Smoothing stops at
+ * those boundaries: run across them, one vote on the last flavour of Citrus
+ * fruit raised the first flavour of Orchard fruit to 72% of its height, drawn
+ * in Orchard fruit's own colour - a bulge for something nobody marked. Within a
+ * family the swell is the point; across one it is a false reading.
+ */
+function smooth(values: number[], family: number[]): number[] {
   const n = values.length, mid = (FALLOFF.length - 1) / 2;
   // Take the strongest neighbour rather than the average: averaging would drag
   // a flavour eight people found down towards the zeroes on either side of it,
   // and the height of a bulge is the whole point.
   return values.map((_, i) =>
-    FALLOFF.reduce((best, f, k) => Math.max(best, f * values[(i + k - mid + n) % n]), 0));
+    FALLOFF.reduce((best, f, k) => {
+      const j = (i + k - mid + n) % n;
+      if (family[j] !== family[i]) return best;
+      return Math.max(best, f * values[j]);
+    }, 0));
 }
 
 const pt = (r: number, deg: number) => {
@@ -79,6 +90,7 @@ export default function Wheel({
     s.counts.map((count, oi) => ({
       count,
       slice: s,
+      family: si,
       correct: s.correct[oi],
       option: s.category.options[oi],
       index: si * s.counts.length + oi,
@@ -92,7 +104,7 @@ export default function Wheel({
   const radius = (count: number) => R_IN + (count / peak) * (R_OUT - R_IN);
 
   const angleOf = (i: number) => i * step;
-  const eased = smooth(spokes.map((s) => s.count));
+  const eased = smooth(spokes.map((s) => s.count), spokes.map((s) => s.family));
   const tips = eased.map((v, i) => pt(radius(v), angleOf(i)));
   const tan = tangents(tips);
 
@@ -217,6 +229,44 @@ export default function Wheel({
           {sub}
         </text>
       )}
+
+      {/* Hover targets: one wedge per flavour, covering the whole spoke rather
+          than the 2.6px dot at the end of it. Each carries its own label, shown
+          by CSS alone - the wheel is rendered on the server and a tooltip is
+          not worth making the whole thing a client component for. */}
+      <style>{`
+        .wheel-hot .wheel-tip { opacity: 0; pointer-events: none; }
+        .wheel-hot:hover .wheel-tip { opacity: 1; }
+        .wheel-hot:hover .wheel-ray { opacity: .55; }
+      `}</style>
+      {spokes.map((s, i) => {
+        const a0 = angleOf(i) - step / 2, a1 = angleOf(i) + step / 2;
+        const text = `${s.slice.category.name} · ${s.option}`;
+        const said = s.count === 0
+          ? "nobody marked it"
+          : `${s.count} ${s.count === 1 ? "person" : "people"}${tasters ? ` of ${tasters}` : ""}`;
+        const w = Math.max(text.length, said.length) * 7.4 + 26;
+        return (
+          <g key={`hot${i}`} className="wheel-hot">
+            <path d={ringSector(R_HUB, R_RING, a0, a1)} fill="transparent" />
+            <path className="wheel-ray" d={ringSector(R_IN, R_OUT, a0 + 0.6, a1 - 0.6)}
+                  fill={s.slice.category.colour} opacity={0} style={{ pointerEvents: "none" }} />
+            <g className="wheel-tip">
+              <rect x={CX - w / 2} y={CY + 44} width={w} height={44} rx={9}
+                    fill="#FFFDF8" stroke="#DED2C0" />
+              <text x={CX} y={CY + 62} textAnchor="middle" fontSize={15} fill="#241A15"
+                    fontFamily="var(--font-body), system-ui, sans-serif" fontWeight={600}>
+                {text}
+              </text>
+              <text x={CX} y={CY + 79} textAnchor="middle" fontSize={12.5} fill="#6B5A4E"
+                    fontFamily="var(--font-body), system-ui, sans-serif">
+                {said}{s.correct ? " · in the wine" : ""}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+
     </svg>
   );
 }

@@ -1,82 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { saveScan, type ScanPayload } from "../../actions";
-import { PRICE_BUCKETS, POSITIONS, type Position } from "@/lib/card";
-import ManualCard from "./ManualCard";
+import { saveScan, deleteSubmission } from "../../actions";
+import { PRICE_BUCKETS } from "@/lib/card";
+import { toPayload, type ScanResult, type WineRow } from "@/lib/scan-payload";
+import ManualCard, { type CardValues } from "./ManualCard";
 
-type WineRow = { position: string; name: string; side: string; count: number };
-
-/** Shape scan-v2.html posts up after it reads a card. */
-type ScanGroup = { name: string; kind: "one" | "many"; value: string | string[] | null; flag: string | null };
-type ScanResult = {
-  side: "white" | "red" | null;
-  groups: ScanGroup[];
-  error?: string;
-  badMarks?: string[];
+export type RecentScan = {
+  id: string; at: string; position: string; wine: string;
+  taster: string; status: string; note: string | null;
 };
 
-const num = (v: string | string[] | null) => {
-  if (typeof v !== "string") return null;
-  const n = parseInt(v, 10);
-  return Number.isFinite(n) ? n : null;
-};
-
-/**
- * Turn the scanner's own vocabulary into a submission. The scanner reads its
- * labels off the printed card, so nothing here hardcodes flavour names — we
- * only need to know which groups are which kind of question.
- */
-function toPayload(eventId: string, r: ScanResult, buckets: string[]): ScanPayload | { error: string } {
-  if (r.error) return { error: "The card wasn't lined up — nothing was read." };
-
-  const one = (name: string) => r.groups.find((g) => g.kind === "one" && g.name.toLowerCase() === name);
-  const you = r.groups.filter((g) => g.name.toLowerCase() === "you are");
-
-  const winePos = one("wine")?.value;
-  if (typeof winePos !== "string" || !POSITIONS.includes(winePos as Position))
-    return { error: "No wine letter was marked, so this card can't be filed." };
-  if (you.length < 2 || typeof you[0].value !== "string" || typeof you[1].value !== "string")
-    return { error: "The taster bubbles weren't both marked, so this card can't be filed." };
-
-  const priceLabel = one("price")?.value;
-  const priceBucket = typeof priceLabel === "string"
-    ? buckets.findIndex((b) => b === priceLabel)
-    : -1;
-
-  const flavours: string[] = [];
-  for (const g of r.groups) {
-    if (g.kind === "many" && Array.isArray(g.value)) {
-      for (const opt of g.value) flavours.push(`${g.name}|${opt}`);
-    }
-  }
-
-  const flags = r.groups.filter((g) => g.flag).map((g) => `${g.name}: ${g.flag}`);
-
-  return {
-    eventId,
-    winePosition: winePos as Position,
-    idA: you[0].value,
-    idB: you[1].value,
-    side: r.side === "red" ? "RED" : "WHITE",
-    priceBucket: priceBucket >= 0 ? priceBucket : null,
-    body: num(one("body")?.value ?? null),
-    acidity: num(one("acidity")?.value ?? null),
-    tannin: num(one("tannin")?.value ?? null),
-    sweetness: num(one("sweetness")?.value ?? null),
-    alcohol: num(one("alcohol")?.value ?? null),
-    rating: num(one("rating")?.value ?? null),
-    flavours,
-    needsReview: flags.length > 0 || r.side === null,
-    reviewNote: flags.join(" · ") || (r.side === null ? "side code unreadable" : undefined),
-  };
-}
-
-export default function ScanTab({ eventId, wines, idSet, expected }: {
+export default function ScanTab({ eventId, wines, idSet, idSetKey, wineCount, priceOnCard, expected, recent, fixing }: {
   eventId: string;
   wines: WineRow[];
   idSet: { label: string; a: string[]; b: string[] };
+  idSetKey: string;
+  wineCount: number;
+  priceOnCard: boolean;
   expected: number | null;
+  recent: RecentScan[];
+  fixing: CardValues | null;
 }) {
   const [log, setLog] = useState<{ ok: boolean; text: string; at: number }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -84,6 +28,10 @@ export default function ScanTab({ eventId, wines, idSet, expected }: {
   // authority. Seeding with our own copy means a message that arrives without
   // them still files a price rather than silently scoring everyone zero.
   const bucketsRef = useRef<string[]>([...PRICE_BUCKETS]);
+  // The message handler is bound once, so it needs the current flight, not the
+  // one that happened to be on screen when the tab mounted.
+  const winesRef = useRef<WineRow[]>(wines);
+  useEffect(() => { winesRef.current = wines; }, [wines]);
 
   useEffect(() => {
     async function onMessage(ev: MessageEvent) {
@@ -92,7 +40,7 @@ export default function ScanTab({ eventId, wines, idSet, expected }: {
       if (data.buckets) bucketsRef.current = data.buckets;
 
       setBusy(true);
-      const payload = toPayload(eventId, data.result, bucketsRef.current);
+      const payload = toPayload(eventId, data.result, bucketsRef.current, winesRef.current);
       if ("error" in payload) {
         setLog((l) => [{ ok: false, text: payload.error, at: Date.now() }, ...l].slice(0, 12));
         setBusy(false);
@@ -112,7 +60,7 @@ export default function ScanTab({ eventId, wines, idSet, expected }: {
   }, [eventId]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(280px,340px)", gap: "2.5rem", alignItems: "start" }}>
+    <div className="split">
       <section>
         <div className="section-title">Photograph a card</div>
         <p className="lede" style={{ marginBottom: "1rem" }}>
@@ -121,14 +69,50 @@ export default function ScanTab({ eventId, wines, idSet, expected }: {
         </p>
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <iframe
-            src="/scan-v2.html?embedded=1"
+            src={`/scan-v2.html?embedded=1&event=${eventId}&ids=${encodeURIComponent(idSetKey)}`
+              + `&wines=${wineCount}&price=${priceOnCard ? 1 : 0}&b=1848`}
             title="Card scanner"
             style={{ width: "100%", height: "min(78vh, 900px)", border: 0, display: "block" }}
             allow="camera"
           />
         </div>
 
-        <ManualCard eventId={eventId} idSet={idSet} wines={wines} />
+        <section style={{ marginTop: "1.5rem" }}>
+          <div className="section-title">Cards in, most recent first</div>
+          {/* Read back out of the database rather than kept in the page, so it
+              survives a reload and shows cards the scanner filed on its own. */}
+          {recent.length === 0
+            ? <p className="small">Nothing filed yet.</p>
+            : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                {recent.map((r) => (
+                  <li key={r.id} className="spread"
+                      style={{ padding: ".45rem 0", borderBottom: "1px solid var(--paper-3)" }}>
+                    <span>
+                      <b>{r.taster}</b>{" → "}Wine {r.position}
+                      <span className="small">{" · "}{r.wine}</span>
+                      {r.status === "NEEDS_REVIEW" && (
+                        <span className="pill pill-warn" style={{ marginLeft: ".4rem", fontSize: ".65rem" }}>
+                          {r.note ?? "check"}
+                        </span>
+                      )}
+                    </span>
+                    <span className="row" style={{ gap: ".3rem" }}>
+                      <a className="btn btn-sm" href={`?tab=scan&fix=${r.id}#manual-card`}
+                         title="Open this card filled in, and correct it">Fix</a>
+                      <form action={deleteSubmission}>
+                        <input type="hidden" name="submissionId" value={r.id} />
+                        <button className="btn btn-sm btn-quiet" type="submit"
+                                title="Remove this card">Undo</button>
+                      </form>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+        </section>
+
+        <ManualCard eventId={eventId} idSet={idSet} wines={wines} fixing={fixing} />
       </section>
 
       <section className="stack" style={{ gap: "1.6rem" }}>

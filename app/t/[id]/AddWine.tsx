@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { addWine } from "../../actions";
-import type { PoletHit } from "@/lib/vinmonopolet";
+import { isPoletUrl, type PoletHit } from "@/lib/vinmonopolet";
 
 /**
- * Add a wine by searching the Polet, so nobody has to go and find a link.
+ * Add a wine by searching the Polet, so nobody has to go and find a link —
+ * though a pasted product link is still taken, for the day search stops
+ * answering or the wine is easier to find in a browser tab.
  *
  * Picking a result only fills the form in — the letter and the side are still
  * yours to confirm before anything is saved, because getting the letter wrong
@@ -24,7 +26,12 @@ export default function AddWine({ eventId, letters, used }: {
   const seq = useRef(0);
 
   const q = query.trim();
-  const searchable = q.length >= 2 && picked?.name !== q;
+  // a pasted link is already the answer, so it never gets searched for; a link
+  // copied out of the address bar can arrive without its https, or with http
+  const asUrl = q.replace(/^http:\/\//i, "https://")
+                 .replace(/^(?=(www\.)?vinmonopolet\.no\/)/i, "https://");
+  const pasted = !picked && isPoletUrl(asUrl) ? asUrl : null;
+  const searchable = q.length >= 2 && !pasted && picked?.name !== q;
 
   useEffect(() => {
     if (!searchable) return;
@@ -67,11 +74,11 @@ export default function AddWine({ eventId, letters, used }: {
 
       <form action={addWine} className="stack" style={{ gap: "1rem" }}>
         <input type="hidden" name="eventId" value={eventId} />
-        <input type="hidden" name="sourceUrl" value={picked?.url ?? ""} />
+        <input type="hidden" name="sourceUrl" value={picked?.url ?? pasted ?? ""} />
 
         <div style={{ position: "relative" }}>
           <label className="field">
-            <span className="label">Search Vinmonopolet</span>
+            <span className="label">Search Vinmonopolet, or paste a link</span>
             <input
               type="text" autoComplete="off" placeholder="amarone terre di leone"
               value={query}
@@ -79,7 +86,7 @@ export default function AddWine({ eventId, letters, used }: {
             />
           </label>
 
-          {(hits.length > 0 || state !== "idle") && (
+          {!pasted && (hits.length > 0 || state !== "idle") && (
             <div className="card" style={{
               position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, marginTop: ".3rem",
               maxHeight: "19rem", overflowY: "auto", padding: ".3rem", boxShadow: "var(--shadow)",
@@ -87,7 +94,7 @@ export default function AddWine({ eventId, letters, used }: {
               {state === "searching" && <p className="small" style={{ padding: ".5rem" }}>Searching…</p>}
               {state === "error" && (
                 <p className="small" style={{ padding: ".5rem", color: "var(--warn)" }}>
-                  Vinmonopolet didn&rsquo;t answer. Paste a product link below instead.
+                  Vinmonopolet didn&rsquo;t answer. Paste a product link into the box instead.
                 </p>
               )}
               {hits.map((h) => (
@@ -119,10 +126,13 @@ export default function AddWine({ eventId, letters, used }: {
           )}
         </div>
 
-        {picked ? (
+        {picked || pasted ? (
           <p className="note note-olive" style={{ padding: ".6rem .8rem" }}>
-            <b>{picked.name}</b> — Polet {picked.code}. Price, alcohol, sugar, acid, grapes and their
-            tasting note all come across, and the price round scores itself.{" "}
+            {picked
+              ? <><b>{picked.name}</b> — Polet {picked.code}. </>
+              : <>That link gets read when you add it. </>}
+            Price, alcohol, sugar, acid, grapes and their tasting note all come across, and the
+            price round scores itself.{" "}
             <button type="button" className="btn btn-sm btn-quiet"
                     onClick={() => type("")}>Clear</button>
           </p>

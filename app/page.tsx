@@ -20,7 +20,7 @@ export default async function Home() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,360px)", gap: "2.5rem", alignItems: "start" }}>
+      <div className="split">
         <section>
           <div className="section-title">Your tastings</div>
           {events.length === 0 ? (

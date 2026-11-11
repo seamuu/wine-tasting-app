@@ -6,6 +6,7 @@ import SetupTab from "./SetupTab";
 import WinesTab from "./WinesTab";
 import ScanTab from "./ScanTab";
 import ResultsTab from "./ResultsTab";
+import QuizTab from "./QuizTab";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ const TABS = [
   ["setup", "Setup"],
   ["wines", "Wines"],
   ["scan", "Scan cards"],
+  ["quiz", "Team quiz"],
   ["results", "Results"],
 ] as const;
 
@@ -26,10 +28,10 @@ export default async function TastingPage({
   params, searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string; lookup?: string; manual?: string }>;
+  searchParams: Promise<{ tab?: string; lookup?: string; manual?: string; fix?: string }>;
 }) {
   const { id } = await params;
-  const { tab = "setup", lookup, manual } = await searchParams;
+  const { tab = "setup", lookup, manual, fix } = await searchParams;
 
   const event = await prisma.event.findUnique({
     where: { id },
@@ -39,6 +41,7 @@ export default async function TastingPage({
         include: { submissions: { include: { taster: true } } },
       },
       tasters: { orderBy: [{ idA: "asc" }, { idB: "asc" }] },
+      teams: { orderBy: { name: "asc" }, include: { guesses: true } },
     },
   });
   if (!event) notFound();
@@ -99,12 +102,37 @@ export default async function TastingPage({
         <ScanTab
           eventId={event.id}
           idSet={idSet}
+          idSetKey={event.idSet}
+          wineCount={event.wineCount}
+          priceOnCard={event.priceOnCard}
           expected={event.guestCount}
+          fixing={(() => {
+            if (!fix) return null;
+            for (const w of event.wines) {
+              const s = w.submissions.find((x) => x.id === fix);
+              if (s) return {
+                id: s.id, position: w.position, idA: s.taster.idA, idB: s.taster.idB,
+                priceBucket: s.priceBucket, body: s.body, acidity: s.acidity,
+                tannin: s.tannin, sweetness: s.sweetness, alcohol: s.alcohol,
+                rating: s.rating, flavours: s.flavours,
+              };
+            }
+            return null;
+          })()}
+          recent={event.wines
+            .flatMap((w) => w.submissions.map((s) => ({
+              id: s.id, at: s.createdAt.toISOString(), position: w.position,
+              wine: w.name, taster: `${s.taster.idA} ${s.taster.idB}`,
+              status: s.status, note: s.reviewNote,
+            })))
+            .sort((a, b) => b.at.localeCompare(a.at))
+            .slice(0, 12)}
           wines={event.wines.map((w) => ({
             position: w.position, name: w.name, side: w.side, count: w.submissions.length,
           }))}
         />
       )}
+      {tab === "quiz" && <QuizTab event={event as never} />}
       {tab === "results" && <ResultsTab event={event} />}
     </main>
   );

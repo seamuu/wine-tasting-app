@@ -49,3 +49,5 @@ card/scan-captures/
 
 # generated print output — rebuild from public/card-v2.html
 wine-cards-A4-2up.pdf
+wine-map-italy-A4.pdf
+wine-map-italy-A4-unlabelled.pdf

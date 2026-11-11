@@ -67,10 +67,15 @@ model Event {
   // guestCount is what "everyone's card is in" is measured against.
   wineCount  Int        @default(4)
   guestCount Int?
+  // Whether the price round is printed on the individual card or guessed by the
+  // team on the matching sheet. It changes the card's layout, so the scanner
+  // has to be told which one it is looking at.
+  priceOnCard Boolean   @default(true)
 
   wines       Wine[]
   tasters     Taster[]
   submissions Submission[]
+  teams       Team[]
 }
 
 model Wine {
@@ -113,8 +118,49 @@ model Wine {
   keyLockedAt   DateTime?
 
   submissions Submission[]
+  guessesAbout TeamGuess[] @relation("GuessAbout")
+  guessesChoice TeamGuess[] @relation("GuessChoice")
 
   @@unique([eventId, position])
+}
+
+/**
+ * The matching round: a team, and what they matched to what.
+ *
+ * Separate from Taster on purpose. A taster is one palate and fills in their
+ * own card; a team is five of them arguing over one sheet, and the two
+ * leaderboards are answers to different questions.
+ */
+model Team {
+  id      String @id @default(cuid())
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name    String
+  guesses TeamGuess[]
+
+  @@unique([eventId, name])
+}
+
+enum QuizCategory {
+  PRICE
+  ORIGIN
+  NOTE
+  GRAPE
+}
+
+model TeamGuess {
+  id       String       @id @default(cuid())
+  teamId   String
+  team     Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  category QuizCategory
+  // the glass being answered about...
+  wineId   String
+  wine     Wine         @relation("GuessAbout", fields: [wineId], references: [id], onDelete: Cascade)
+  // ...and the wine whose answer they picked. Right when the two are the same.
+  choiceId String
+  choice   Wine         @relation("GuessChoice", fields: [choiceId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, wineId, category])
 }
 
 // One person at one event. They never write their name on the card; the host

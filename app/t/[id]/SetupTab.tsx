@@ -10,7 +10,7 @@ type Wine = {
 
 type EventRow = {
   id: string; name: string; idSet: string; revealMode: string;
-  wineCount: number; guestCount: number | null; wines: Wine[];
+  wineCount: number; guestCount: number | null; priceOnCard: boolean; wines: Wine[];
 };
 
 function Check({ done, children, warn }: { done: boolean; children: React.ReactNode; warn?: boolean }) {
@@ -44,10 +44,11 @@ export default function SetupTab({ event }: { event: EventRow }) {
 
   const allWinesIn = event.wines.length >= event.wineCount;
   const overCapacity = guests > capacity;
-  const printUrl = `/card-v2.html?ids=${event.idSet}&wines=${event.wineCount}`;
+  const printUrl = `/card-v2.html?ids=${event.idSet}&wines=${event.wineCount}`
+    + `&price=${event.priceOnCard ? 1 : 0}`;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,360px)", gap: "2.5rem", alignItems: "start" }}>
+    <div className="split">
       <section className="stack" style={{ gap: "2rem" }}>
         <div>
           <div className="section-title">The night</div>
@@ -101,6 +102,18 @@ export default function SetupTab({ event }: { event: EventRow }) {
                   <option key={n} value={n}>{n} — letters A to {POSITIONS[n - 1]}</option>
                 ))}
               </select>
+            </label>
+
+            <label className="field">
+              <span className="label">The price round</span>
+              <select name="priceOnCard" defaultValue={event.priceOnCard ? "1" : "0"}>
+                <option value="1">On everyone&rsquo;s card — each person guesses</option>
+                <option value="0">On the team sheet — guessed together</option>
+              </select>
+              <span className="small">
+                Off the card, the freed space goes into bigger aroma bubbles, which photograph
+                better. The scanner is told which layout to expect.
+              </span>
             </label>
 
             <label className="field">

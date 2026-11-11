@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { bucketForPrice, POSITIONS, type Position } from "@/lib/card";
 import { fetchPolet, draftKey } from "@/lib/vinmonopolet";
+import { CATEGORIES, optionOrder, type QuizWine } from "@/lib/quiz";
+import type { QuizCategory } from "@/app/generated/prisma/enums";
 
 const str = (v: FormDataEntryValue | null) => {
   const s = typeof v === "string" ? v.trim() : "";
@@ -47,6 +49,7 @@ export async function updateEvent(form: FormData) {
         : str(form.get("revealMode")) === "OPEN" ? "OPEN" : "BLIND",
       wineCount: wineCount == null ? undefined : Math.min(8, Math.max(2, wineCount)),
       guestCount: form.get("guestCount") == null ? undefined : (int(form.get("guestCount")) ?? null),
+      priceOnCard: form.has("priceOnCard") ? str(form.get("priceOnCard")) === "1" : undefined,
     },
   });
   revalidatePath(`/t/${id}`, "layout");
@@ -149,6 +152,21 @@ export async function updateWine(form: FormData) {
   revalidatePath(`/t/${wine.eventId}`, "layout");
 }
 
+/**
+ * Throw away one card's reading. Test scans happen - the host photographs a
+ * half-filled card to check the camera works - and without this they sit in the
+ * results as a taster who scored badly on a wine they never drank.
+ */
+export async function deleteSubmission(form: FormData) {
+  const id = String(form.get("submissionId"));
+  const gone = await prisma.submission.delete({ where: { id } });
+  // A taster who only ever existed because of that card goes with it, rather
+  // than lingering in the standings with nothing behind them.
+  const left = await prisma.submission.count({ where: { tasterId: gone.tasterId } });
+  if (left === 0) await prisma.taster.delete({ where: { id: gone.tasterId } });
+  revalidatePath(`/t/${gone.eventId}`, "layout");
+}
+
 export async function deleteWine(form: FormData) {
   const id = String(form.get("wineId"));
   const wine = await prisma.wine.delete({ where: { id } });
@@ -160,9 +178,16 @@ export async function setStage(form: FormData) {
   const id = String(form.get("wineId"));
   const stage = String(form.get("stage")) as
     "UPCOMING" | "POURING" | "LOCKED" | "REVEALED";
+  // Stepping back before LOCKED drops the lock timestamp too, so a wine that
+  // was locked by mistake is genuinely back to being poured rather than
+  // carrying a lock time for a lock that no longer applies.
   const wine = await prisma.wine.update({
     where: { id },
-    data: { stage, ...(stage === "LOCKED" ? { keyLockedAt: new Date() } : {}) },
+    data: {
+      stage,
+      ...(stage === "LOCKED" ? { keyLockedAt: new Date() } : {}),
+      ...(stage === "UPCOMING" || stage === "POURING" ? { keyLockedAt: null } : {}),
+    },
   });
   revalidatePath(`/t/${wine.eventId}`, "layout");
 }
@@ -276,6 +301,70 @@ export async function saveManualCard(form: FormData) {
 
   revalidatePath(`/t/${eventId}`, "layout");
   redirect(`/t/${eventId}?tab=scan&manual=saved`);
+}
+
+/**
+ * Type in one team's answer sheet.
+ *
+ * Hand-entered rather than scanned: there are only two sheets and sixteen
+ * answers on each, so a reader for a one-off layout would cost more than it
+ * saves — and would be the newest, least-proven thing in the room on the night.
+ *
+ * The form carries option numbers as printed; this resolves them to the wine
+ * whose answer that was, so scoring is a comparison of two ids.
+ */
+export async function saveTeamGuesses(form: FormData) {
+  const eventId = String(form.get("eventId"));
+  const name = str(form.get("teamName")) ?? "Team 1";
+
+  const team = await prisma.team.upsert({
+    where: { eventId_name: { eventId, name } },
+    create: { eventId, name },
+    update: {},
+  });
+
+  const wines = await prisma.wine.findMany({
+    where: { eventId }, orderBy: { position: "asc" },
+  });
+
+  const writes: { category: QuizCategory; wineId: string; choiceId: string }[] = [];
+  const clears: { category: QuizCategory; wineId: string }[] = [];
+
+  for (const category of CATEGORIES) {
+    const order = optionOrder(eventId, category, wines as unknown as QuizWine[]);
+    for (const wine of wines) {
+      const raw = str(form.get(`g:${category}:${wine.id}`));
+      const slot = raw == null ? NaN : parseInt(raw, 10);
+      if (!Number.isFinite(slot) || !order[slot]) { clears.push({ category, wineId: wine.id }); continue; }
+      writes.push({ category, wineId: wine.id, choiceId: order[slot].id });
+    }
+  }
+
+  await prisma.$transaction([
+    ...clears.map(({ category, wineId }) =>
+      prisma.teamGuess.deleteMany({ where: { teamId: team.id, wineId, category } })),
+    ...writes.map(({ category, wineId, choiceId }) =>
+      prisma.teamGuess.upsert({
+        where: { teamId_wineId_category: { teamId: team.id, wineId, category } },
+        create: { teamId: team.id, wineId, category, choiceId },
+        update: { choiceId },
+      })),
+  ]);
+
+  revalidatePath(`/t/${eventId}`, "layout");
+}
+
+export async function renameTeam(form: FormData) {
+  const id = String(form.get("teamId"));
+  const name = str(form.get("name"));
+  if (!name) return;
+  const team = await prisma.team.update({ where: { id }, data: { name } });
+  revalidatePath(`/t/${team.eventId}`, "layout");
+}
+
+export async function deleteTeam(form: FormData) {
+  const team = await prisma.team.delete({ where: { id: String(form.get("teamId")) } });
+  revalidatePath(`/t/${team.eventId}`, "layout");
 }
 
 export async function nameTaster(form: FormData) {

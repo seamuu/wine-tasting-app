@@ -24,12 +24,21 @@ function Chip({ name, value, label, defaultChecked }: {
  * printed one — you are typing while looking at the card, so anything that
  * makes you hunt for the next question costs more than the space it saves.
  */
-export default function ManualCard({ eventId, idSet, wines }: {
+/** An existing card being corrected, rather than a new one being typed in. */
+export type CardValues = {
+  id: string; position: string; idA: string; idB: string;
+  priceBucket: number | null; body: number | null; acidity: number | null;
+  tannin: number | null; sweetness: number | null; alcohol: number | null;
+  rating: number | null; flavours: string[];
+};
+
+export default function ManualCard({ eventId, idSet, wines, fixing }: {
   eventId: string;
   idSet: { label: string; a: string[]; b: string[] };
   wines: WineRow[];
+  fixing?: CardValues | null;
 }) {
-  const [position, setPosition] = useState(wines[0]?.position ?? "A");
+  const [position, setPosition] = useState(fixing?.position ?? wines[0]?.position ?? "A");
   const wine = wines.find((w) => w.position === position);
   const side = wine?.side ?? "WHITE";
   const cats = categoriesFor(side);
@@ -37,13 +46,14 @@ export default function ManualCard({ eventId, idSet, wines }: {
   if (wines.length === 0) return null;
 
   return (
-    <details className="card" style={{ marginTop: "1.2rem" }}>
+    <details className="card" style={{ marginTop: "1.2rem" }} open={!!fixing} id="manual-card">
       <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: ".9rem" }}>
-        Type a card in by hand
+        {fixing ? `Fixing ${fixing.idA} ${fixing.idB} — wine ${fixing.position}` : "Type a card in by hand"}
       </summary>
       <p className="small" style={{ margin: ".6rem 0 1.2rem" }}>
-        For a card the camera won&rsquo;t read. It files exactly like a scan, so if you get the
-        photo working later it just replaces this.
+        {fixing
+          ? "Everything the scan read is filled in below. Change what is wrong and save — it replaces the card rather than adding another."
+          : "For a card the camera won\u2019t read. It files exactly like a scan, so if you get the photo working later it just replaces this."}
       </p>
 
       <form action={saveManualCard} className="stack" style={{ gap: "1.4rem" }}>
@@ -69,9 +79,9 @@ export default function ManualCard({ eventId, idSet, wines }: {
           <div>
             <span className="label">Who filled it in — {idSet.label}</span>
             <div className="row" style={{ gap: "1rem", marginTop: ".35rem", alignItems: "flex-start" }}>
-              <div className="chips">{idSet.a.map((c) => <Chip key={c} name="idA" value={c} label={c} />)}</div>
+              <div className="chips">{idSet.a.map((c) => <Chip key={c} name="idA" value={c} label={c} defaultChecked={fixing?.idA === c} />)}</div>
               <div className="chips" style={{ paddingLeft: "1rem", borderLeft: "1px solid var(--rule)" }}>
-                {idSet.b.map((c) => <Chip key={c} name="idB" value={c} label={c} />)}
+                {idSet.b.map((c) => <Chip key={c} name="idB" value={c} label={c} defaultChecked={fixing?.idB === c} />)}
               </div>
             </div>
           </div>
@@ -80,7 +90,10 @@ export default function ManualCard({ eventId, idSet, wines }: {
         <div>
           <span className="label">Price guess — NOK</span>
           <div className="chips" style={{ marginTop: ".35rem" }}>
-            {PRICE_BUCKETS.map((b, i) => <Chip key={b} name="priceBucket" value={String(i)} label={b} />)}
+            {PRICE_BUCKETS.map((b, i) => (
+              <Chip key={b} name="priceBucket" value={String(i)} label={b}
+                    defaultChecked={fixing?.priceBucket === i} />
+            ))}
           </div>
         </div>
 
@@ -94,7 +107,8 @@ export default function ManualCard({ eventId, idSet, wines }: {
               </div>
               <div className="chips">
                 {[1, 2, 3, 4, 5].map((n) => (
-                  <Chip key={n} name={row.attr} value={String(n)} label={String(n)} />
+                  <Chip key={n} name={row.attr} value={String(n)} label={String(n)}
+                        defaultChecked={fixing?.[row.attr as keyof CardValues] === n} />
                 ))}
               </div>
             </div>
@@ -116,7 +130,8 @@ export default function ManualCard({ eventId, idSet, wines }: {
                       <div className="chips">
                         {c.options.map((o) => (
                           <label key={o} className="chip chip-wide">
-                            <input type="checkbox" name="flavours" value={`${c.name}|${o}`} />
+                            <input type="checkbox" name="flavours" value={`${c.name}|${o}`}
+                                   defaultChecked={fixing?.flavours.includes(`${c.name}|${o}`)} />
                             <span>{o}</span>
                           </label>
                         ))}
@@ -133,7 +148,8 @@ export default function ManualCard({ eventId, idSet, wines }: {
           <span className="label">Rating — 1 to 10</span>
           <div className="chips" style={{ marginTop: ".35rem" }}>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <Chip key={n} name="rating" value={String(n)} label={String(n)} />
+              <Chip key={n} name="rating" value={String(n)} label={String(n)}
+                    defaultChecked={fixing?.rating === n} />
             ))}
           </div>
         </div>

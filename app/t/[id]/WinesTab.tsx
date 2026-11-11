@@ -49,7 +49,7 @@ export default function WinesTab({ event }: { event: { id: string; wineCount: nu
   const letters = POSITIONS.slice(0, event.wineCount);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(300px,360px)", gap: "2.5rem", alignItems: "start" }}>
+    <div className="split">
       <section>
         <div className="section-title">The flight</div>
         {event.wines.length === 0 ? (

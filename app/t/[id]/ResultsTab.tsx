@@ -1,4 +1,4 @@
-import { nameTaster } from "../../actions";
+import { nameTaster, deleteSubmission } from "../../actions";
 import { PRICE_BUCKETS, splitFlavour } from "@/lib/card";
 import { scoreWine } from "@/lib/scoring";
 import {
@@ -37,7 +37,7 @@ export default function ResultsTab({ event }: {
     <div className="stack" style={{ gap: "2.8rem" }}>
       <section>
         <div className="section-title">How close everyone got</div>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)", gap: "2rem", alignItems: "start" }}>
+        <div className="split-even">
           <div className="stack" style={{ gap: ".5rem" }}>
             {standings.map((r, i) => (
               <div key={r.taster.id} style={{ display: "grid", gridTemplateColumns: "1.4rem minmax(0,1fr) 3rem", gap: ".7rem", alignItems: "center" }}>
@@ -91,7 +91,7 @@ export default function ResultsTab({ event }: {
               {usedRoom && " — no answer key, so scored against the room"}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.1fr) minmax(0,1fr)", gap: "2rem", alignItems: "start" }}>
+            <div className="split-even">
               <div>
                 <Wheel
                   slices={wheelData(subs, wine.side, wine.keyFlavours)}
@@ -156,6 +156,7 @@ export default function ResultsTab({ event }: {
                     <th style={{ padding: ".35rem .5rem", fontWeight: 600, textAlign: "right" }}>Structure</th>
                     <th style={{ padding: ".35rem .5rem", fontWeight: 600, textAlign: "right" }}>Aroma</th>
                     <th style={{ padding: ".35rem 0 .35rem .5rem", fontWeight: 600, textAlign: "right" }}>Match</th>
+                    <th style={{ padding: ".35rem 0 .35rem .5rem" }}><span className="sr-only">Remove</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -171,6 +172,13 @@ export default function ResultsTab({ event }: {
                       <td className="tabular" style={{ padding: ".35rem .5rem", textAlign: "right" }}>{pct(sc?.flavour)}</td>
                       <td className="tabular" style={{ padding: ".35rem 0 .35rem .5rem", textAlign: "right", fontWeight: 600 }}>
                         {sc?.total == null ? "—" : `${sc.total}%`}
+                      </td>
+                      <td style={{ padding: ".35rem 0 .35rem .5rem", textAlign: "right" }}>
+                        <form action={deleteSubmission}>
+                          <input type="hidden" name="submissionId" value={s.id} />
+                          <button className="btn btn-sm btn-quiet" type="submit"
+                                  title="Remove this card — use it for test scans">×</button>
+                        </form>
                       </td>
                     </tr>
                   ))}

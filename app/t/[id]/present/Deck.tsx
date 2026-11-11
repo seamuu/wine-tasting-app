@@ -65,17 +65,25 @@ export default function Deck({ slides, eventId, eventName, initial = 0 }: {
       <footer className="deck-foot">
         <div style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap" }}>
           {slides.map((s, n) => (
-            <button key={s.key} onClick={() => go(n)} aria-label={s.title}
-                    title={s.title}
-                    style={{ border: 0, background: "none", padding: 2, cursor: "pointer", lineHeight: 0 }}>
+            <a key={s.key} href={`?s=${n}`} aria-label={s.title} title={s.title}
+               onClick={(e) => { e.preventDefault(); go(n); }}
+               style={{ border: 0, background: "none", padding: 2, cursor: "pointer", lineHeight: 0 }}>
               <span className="deck-dot" {...(n === i ? { "data-on": "" } : {})} />
-            </button>
+            </a>
           ))}
         </div>
         <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
           <span className="tabular">{i + 1} / {slides.length}</span>
-          <button className="btn btn-sm" onClick={() => go(i - 1)} disabled={i === 0}>←</button>
-          <button className="btn btn-sm" onClick={() => go(i + 1)} disabled={i === last}>→</button>
+          {/* Anchors, not buttons. A slide is addressable as ?s=N, so navigation
+              is a plain link that works before React has hydrated - or when it
+              never does, which in dev is one config edit away. The click
+              handler takes over when the page is live, keeping it instant. */}
+          <a className={`btn btn-sm${i === 0 ? " is-disabled" : ""}`} href={`?s=${Math.max(0, i - 1)}`}
+             aria-disabled={i === 0}
+             onClick={(e) => { e.preventDefault(); go(i - 1); }}>←</a>
+          <a className={`btn btn-sm${i === last ? " is-disabled" : ""}`} href={`?s=${Math.min(last, i + 1)}`}
+             aria-disabled={i === last}
+             onClick={(e) => { e.preventDefault(); go(i + 1); }}>→</a>
           <span style={{ opacity: .7 }}>F for fullscreen</span>
           <Link className="btn btn-sm btn-quiet" href={`/t/${eventId}?tab=results`}>Exit</Link>
         </div>

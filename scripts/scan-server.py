@@ -53,17 +53,13 @@ class Handler(SimpleHTTPRequestHandler):
                 with open(os.path.join(folder, name), "wb") as fh:
                     fh.write(raw)
 
+        # Keep everything the scanner sent except the images, which are already
+        # on disk. Listing the fields here meant a new diagnostic added to the
+        # scanner was dropped on the floor and read as "the field is null",
+        # which sent a debugging session chasing the wrong thing.
+        rest = {k: v for k, v in payload.items() if k not in ("photo", "rectified")}
         with open(os.path.join(folder, "result.json"), "w") as fh:
-            json.dump(
-                {
-                    "when": stamp,
-                    "userAgent": payload.get("ua"),
-                    "note": payload.get("note"),
-                    "result": payload.get("result"),
-                },
-                fh,
-                indent=2,
-            )
+            json.dump({"when": stamp, "userAgent": payload.get("ua"), **rest}, fh, indent=2)
 
         body = json.dumps({"ok": True, "id": stamp}).encode()
         self.send_response(200)

@@ -140,10 +140,13 @@
     flex-direction:column;
   }
 
+  /* Border-filled, not background-filled: print drops background colours
+     unless "Background graphics" is ticked, and the marks must always print. */
   .reg{
     position:absolute;
     width:6mm;
     height:6mm;
+    border:3mm solid var(--ink);
     background:var(--ink);
   }
   .reg-tl{ top:5mm; left:5mm; }

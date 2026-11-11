@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scan · card-v2</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="fonts/card-fonts.css" rel="stylesheet">
 <style>
   /* Same paper palette as the app that embeds this. Committed to one light
      look rather than following the device: a wine list is printed on paper. */
@@ -71,6 +69,18 @@
   td,th{ text-align:left; padding:.18rem .4rem .18rem 0; border-bottom:1px solid var(--line); }
   th{ font-family:"IBM Plex Mono", monospace; font-size:.65rem; text-transform:uppercase; color:var(--muted); font-weight:400; }
   td.n{ text-align:right; font-family:"IBM Plex Mono", monospace; }
+  /* Dragging a handle onto a printed line by eye on a phone is worth about a
+     millimetre of error, which is enough to slide the sample discs off the
+     bubbles. The loupe shows the pixels under the handle at 5x with a crosshair,
+     which takes that back down to the width of the printed line itself. */
+  #loupe{ position:absolute; right:.5rem; top:.5rem; width:132px; height:132px;
+          border:2px solid var(--ok); border-radius:50%; background:#fff;
+          pointer-events:none; z-index:5; box-shadow:0 2px 12px rgba(0,0,0,.35); }
+  /* Said loudly, because "the card read fine" and "the card was filed" are
+     different things and only one of them counts. */
+  .filed{ margin:0; padding:.55rem .8rem; border-radius:8px; font-size:.9rem; font-weight:600; }
+  .filed.ok{ background:#E8F3EA; color:#1F6B33; border:1px solid #B9DCC2; }
+  .filed.bad{ background:#FBEAEA; color:#8C1D1D; border:1px solid #E9BFBF; }
   iframe#ref{ position:absolute; left:-10000px; top:0; width:900px; height:1300px; border:0; }
 </style>
 </head>
@@ -83,6 +93,8 @@
       Photograph a filled-in card head-on. The four corner squares are found automatically;
       drag the green handles if any of them lands wrong. The bubble map is measured from the
       live card layout, so it can never drift from what was printed.
+      Cards that printed <b>without</b> the black squares still read — tick the box below and
+      line the handles up on the printed rules instead.
     </p>
   </div>
 
@@ -90,14 +102,43 @@
     <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
     <button class="btn btn-primary" onclick="document.getElementById('file').click()">Choose photo</button>
     <button class="btn" id="readBtn" disabled>Read card</button>
+    <label class="btn" id="cardSetup" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;">
+      Printed with
+      <select id="idsSel" style="font:inherit;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
+    </label>
+    <label class="btn" id="cardWines" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;">
+      Wines
+      <select id="winesSel" style="font:inherit;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
+    </label>
+    <label class="btn" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;">
+      <input type="checkbox" id="nomarks"> Cards have no black squares
+    </label>
+    <label class="btn" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-weight:400;">
+      Side
+      <select id="sideSel" style="font:inherit;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;">
+        <option value="">read from card</option>
+        <option value="white">white — force</option>
+        <option value="red">red — force</option>
+      </select>
+    </label>
+    <span class="btn" id="buildStamp" style="cursor:default;font-weight:600;">build 18:48</span>
     <span id="status">Loading card layout…</span>
   </div>
+
+  <p class="sub" id="aimHint" hidden style="margin:0">
+    <b>No-squares mode.</b> Put the two top handles on the <b>far left and far right ends of the long
+    line under “Wine Card”</b>, and the two bottom handles on the <b>bottom-left and bottom-right
+    corners of the “Rating” box</b>. Drag slowly — the loupe shows exactly where the point lands.
+  </p>
 
   <div class="stage" id="stage">
     <canvas id="srcCanvas"></canvas>
     <div class="handle" id="h-tl"></div><div class="handle" id="h-tr"></div>
     <div class="handle" id="h-bl"></div><div class="handle" id="h-br"></div>
+    <canvas id="loupe" hidden></canvas>
   </div>
+
+  <p class="filed" id="filed" hidden></p>
 
   <div class="cols">
     <div>
@@ -116,7 +157,20 @@
 <!-- The reference card is the scanner's ruler, so it must never be a stale
      cached copy: a card that has moved since the browser cached it would be
      measured wrongly and every read would drift. -->
-<iframe id="ref" src="card-v2.html?ruler=2" title="layout reference"></iframe>
+<iframe id="ref" title="layout reference"></iframe>
+<script>
+  // The ruler has to be the SAME card that was printed: a different taster
+  // vocabulary reads every name wrong, a shorter Wine row cannot see the later
+  // letters at all, and a card printed without the price round has larger aroma
+  // bubbles in different places. All three settings ride in on this page's URL.
+  (function(){
+    const q = new URLSearchParams(location.search);
+    const src = new URL("card-v2.html", location.href);
+    src.searchParams.set("ruler", "2");
+    for (const k of ["ids", "wines", "price"]) if (q.get(k)) src.searchParams.set(k, q.get(k));
+    document.getElementById("ref").src = src.toString();
+  })();
+</script>
 
 <script>
 /* ------------------------------------------------------------------ *
@@ -133,6 +187,15 @@ const DST_W = SHEET_W * SC, DST_H = SHEET_H * SC;
 const MARK = { tl:{x:8,y:8}, tr:{x:SHEET_W-8,y:8}, bl:{x:8,y:SHEET_H-8}, br:{x:SHEET_W-8,y:SHEET_H-8} };
 
 let MAP = null;
+// Filled in by buildMap(): the card's printed rules in mm, for scoring a fit.
+let RULES = [];
+// Filled in by buildMap(): where the fallback alignment lines sit, in mm.
+let ANCHORS = null;
+// True when the printed cards have no corner squares, so the card is lined up
+// on its printed rules instead. Sticky, because a whole stack prints the same.
+let noMarks = false;
+// "" = trust the card's own side code, "white"/"red" = the operator says so.
+let forcedSide = "";
 
 function extractSheet(sheetEl){
   const S = sheetEl.getBoundingClientRect();
@@ -195,6 +258,41 @@ function buildMap(){
     window.__layoutGap = gapMM;
     return false;
   }
+  // Alignment points for cards that printed WITHOUT their corner squares.
+  // Both are heavy printed rules that survive any print dialog because they are
+  // borders, not background fills: the long rule under the title, and the box
+  // around the Rating row. Ends of the top rule + bottom corners of the box give
+  // a quad 128mm wide and ~170mm tall, which conditions the homography as well
+  // as the corner marks do. Measured off the same DOM as the bubbles, so this
+  // cannot drift from what was printed either.
+  const mmPt = (px, py) => ({ x:(px - S.left)/PX, y:(py - S.top)/PX });
+  const head = w.querySelector(".head").getBoundingClientRect();
+  const half = 0.25 * PX;                       // half the rule's own thickness
+  ANCHORS = {
+    tl: mmPt(head.left,  head.bottom - half),
+    tr: mmPt(head.right, head.bottom - half),
+    bl: mmPt(ov.left  + 0.2*PX, ov.bottom - 0.2*PX),
+    br: mmPt(ov.right - 0.2*PX, ov.bottom - 0.2*PX),
+    // The Rating box has rounded corners, so its bottom edge stops being
+    // straight this far short of the corner the anchors name. The detector
+    // has to add it back; a human dragging a handle does not care.
+    rMM: parseFloat(getComputedStyle(w.querySelector(".overall")).borderBottomLeftRadius) / PX || 0,
+  };
+  // Every heavy printed rule on the card, in mm. A correct alignment puts all
+  // of them on ink at once, which is a far better test of a candidate than any
+  // one line's length: this is what tells a real card from a table edge.
+  const rectMM = el => { const q = el.getBoundingClientRect();
+    return { l:(q.left-S.left)/PX, t:(q.top-S.top)/PX, r:(q.right-S.left)/PX, b:(q.bottom-S.top)/PX }; };
+  RULES = [];
+  const underline = el => { const q = rectMM(el); RULES.push({ x0:q.l, y0:q.b, x1:q.r, y1:q.b }); };
+  const boxEdges = el => { const q = rectMM(el);
+    RULES.push({ x0:q.l, y0:q.t, x1:q.r, y1:q.t }, { x0:q.l, y0:q.b, x1:q.r, y1:q.b },
+               { x0:q.l, y0:q.t, x1:q.l, y1:q.b }, { x0:q.r, y0:q.t, x1:q.r, y1:q.b }); };
+  underline(w.querySelector(".head"));
+  w.querySelectorAll(".block-header").forEach(underline);
+  boxEdges(w.querySelector(".overall"));
+  boxEdges(w.querySelector(".side-banner"));
+
   MAP = { white: extractSheet(w), red: extractSheet(r) };
   window.__layoutGap = gapMM;
   return true;
@@ -270,6 +368,161 @@ function findMark(imgData, xr0, xr1, yr0, yr1){
   for (const th of tries){
     const b = largestBlobAtThreshold(lum8,bw,bh,th,x0,y0);
     if (b) return b;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ *
+ * 2b. Finding a card that has no corner squares
+ *
+ * The card's two heaviest printed rules - the one under the title and the
+ * bottom of the Rating box - are 128mm long, level with each other and 170mm
+ * apart. Nothing else on a table looks like that. So: sweep the photo for long
+ * near-level runs of ink, then pick the pair whose length and separation match
+ * the card's own proportions, taken from the reference layout rather than
+ * hardcoded. Their four ends are the four points the homography needs.
+ * ------------------------------------------------------------------ */
+const AUTO_TILT = 14, AUTO_TILT_STEP = 0.5;   // degrees of camera roll tolerated
+
+// A binary "is this ink" view of the photo, small enough to sweep quickly.
+function workingMask(img, pct){
+  const scale = Math.min(1, 640 / img.width);
+  const w = Math.max(1, Math.round(img.width*scale)), h = Math.max(1, Math.round(img.height*scale));
+  const gray = new Uint8ClampedArray(w*h), hist = new Uint32Array(256);
+  for (let y=0; y<h; y++) for (let x=0; x<w; x++){
+    const sx = Math.min(img.width-1, Math.round(x/scale)), sy = Math.min(img.height-1, Math.round(y/scale));
+    const i = (sy*img.width + sx)*4;
+    const l = lum(img.data[i], img.data[i+1], img.data[i+2])|0;
+    gray[y*w+x] = l; hist[l]++;
+  }
+  let t;
+  if (pct == null) t = otsuThreshold(hist, w*h);
+  else { const want = w*h*pct; let acc = 0; for (t=0; t<256; t++){ acc += hist[t]; if (acc >= want) break; } }
+  const mask = new Uint8Array(w*h);
+  for (let i=0; i<w*h; i++) mask[i] = gray[i] < t ? 1 : 0;
+  return { mask, w, h, scale };
+}
+
+const yAtX = (L, x) => L.b + L.t*x;
+
+// Every long, near-continuous, near-level run of ink, as a line plus its extent.
+function levelLines(M){
+  const { mask, w, h } = M;
+  const found = [];
+  for (let a = -AUTO_TILT; a <= AUTO_TILT; a += AUTO_TILT_STEP){
+    const t = Math.tan(a*Math.PI/180);
+    const off = Math.ceil(Math.abs(t)*w) + 2, nb = h + 2*off;
+    const cnt = new Int32Array(nb), lo = new Int32Array(nb).fill(w), hi = new Int32Array(nb).fill(-1);
+    for (let y=0; y<h; y++){
+      const row = y*w;
+      for (let x=0; x<w; x++){
+        if (!mask[row+x]) continue;
+        const b = Math.round(y - t*x) + off;
+        cnt[b]++;
+        if (x < lo[b]) lo[b] = x;
+        if (x > hi[b]) hi[b] = x;
+      }
+    }
+    // A printed rule straddles a bucket boundary as often as not, so a line is
+    // read three buckets at a time.
+    for (let b=1; b<nb-1; b++){
+      const c = cnt[b-1] + cnt[b] + cnt[b+1];
+      if (!c) continue;
+      const x0 = Math.min(lo[b-1], lo[b], lo[b+1]), x1 = Math.max(hi[b-1], hi[b], hi[b+1]);
+      const span = x1 - x0;
+      if (span < w*0.25) continue;          // too short to be a full-width rule
+      if (c < span*0.75) continue;          // dotted with gaps: a row of text
+      found.push({ a, t, b: b - off, x0, x1, span, fill: c/span });
+    }
+  }
+  // One rule answers at several tilts and offsets; keep the best of each cluster.
+  found.sort((p, q) => q.fill*q.span - p.fill*p.span);
+  const kept = [];
+  for (const L of found){
+    const mid = M.w/2;
+    if (kept.some(K => Math.abs(yAtX(K, mid) - yAtX(L, mid)) < Math.max(3, M.h*0.012))) continue;
+    kept.push(L);
+  }
+  kept.sort((p, q) => yAtX(p, M.w/2) - yAtX(q, M.w/2));
+  return kept;
+}
+
+// Where does the ink on this line actually start and stop? The sweep's extent
+// counts any stray mark that happens to sit on the same line, so re-walk it and
+// keep the longest continuous stretch.
+function lineExtent(M, L){
+  const { mask, w, h } = M;
+  const inkAt = x => {
+    const y = Math.round(yAtX(L, x));
+    for (let dy=-2; dy<=2; dy++){
+      const yy = y + dy;
+      if (yy >= 0 && yy < h && mask[yy*w + x]) return true;
+    }
+    return false;
+  };
+  const gap = Math.max(3, Math.round(w*0.02));      // ignore breaks this short
+  let best = null, start = null, miss = 0;
+  for (let x = Math.max(0, L.x0); x <= Math.min(w-1, L.x1); x++){
+    if (inkAt(x)){
+      if (start === null) start = x;
+      miss = 0;
+    } else if (start !== null && ++miss > gap){
+      const end = x - miss;
+      if (!best || end - start > best.x1 - best.x0) best = { x0:start, x1:end };
+      start = null; miss = 0;
+    }
+  }
+  if (start !== null){
+    const end = Math.min(w-1, L.x1);
+    if (!best || end - start > best.x1 - best.x0) best = { x0:start, x1:end };
+  }
+  return best;
+}
+
+// The pair of rules that fits the card's proportions, searched from the outside
+// in: the title rule is the topmost full-width line on a card and the Rating
+// box's bottom is the last one.
+function pickRulePair(M, lines, wantRatio){
+  let best = null;
+  for (let i = 0; i < Math.min(4, lines.length); i++){
+    for (let j = lines.length - 1; j >= Math.max(i+1, lines.length - 4); j--){
+      const top = lines[i], bot = lines[j];
+      const et = lineExtent(M, top), eb = lineExtent(M, bot);
+      if (!et || !eb) continue;
+      const lt = (et.x1-et.x0) / Math.cos(top.a*Math.PI/180);
+      const lb = (eb.x1-eb.x0) / Math.cos(bot.a*Math.PI/180);
+      if (lt < M.w*0.25 || lb < M.w*0.25) continue;
+      if (Math.abs(lt-lb) / Math.max(lt,lb) > 0.15) continue;   // both are 128mm
+      const mid = M.w/2, sep = yAtX(bot, mid) - yAtX(top, mid);
+      if (sep <= 0) continue;
+      const ratio = sep / ((lt+lb)/2);
+      const score = Math.abs(ratio-wantRatio)/wantRatio + Math.abs(top.a-bot.a)/20;
+      if (score > 0.15) continue;                               // not this card
+      if (!best || score < best.score) best = { score, top, bot, et, eb, lt, lb };
+    }
+  }
+  return best;
+}
+
+// Four photo-space points to hand the homography, or null if the card was not
+// recognised and the operator has to place the handles.
+function autoAnchors(img){
+  if (!ANCHORS) return null;
+  const widthMM = ANCHORS.tr.x - ANCHORS.tl.x;
+  const wantRatio = (ANCHORS.bl.y - ANCHORS.tl.y) / widthMM;
+  for (const pct of [null, 0.10, 0.05, 0.02]){
+    const M = workingMask(img, pct);
+    const pair = pickRulePair(M, levelLines(M), wantRatio);
+    if (!pair) continue;
+    const s = 1/M.scale, pxPerMM = pair.lt / widthMM;
+    const grow = ANCHORS.rMM * pxPerMM;               // out to the real corner
+    const pt = (L, x) => ({ x: x*s, y: yAtX(L, x)*s });
+    return {
+      tl: pt(pair.top, pair.et.x0),
+      tr: pt(pair.top, pair.et.x1),
+      bl: pt(pair.bot, pair.eb.x0 - grow),
+      br: pt(pair.bot, pair.eb.x1 + grow),
+    };
   }
   return null;
 }
@@ -399,11 +652,18 @@ function findMapOffset(img, groups){
   let g0 = searchOffset(img, all, 0, 0, 3.0*SC, 0.4*SC);
   g0 = searchOffset(img, all, g0.dx, g0.dy, 0.5*SC, 0.1*SC);
 
+  // Each group is then refitted on its own rings. The reach used to be 0.8mm,
+  // which is less than a real card bends: photographed flat on a table a card
+  // still lifts at an edge, and the row that ends up furthest from the plane
+  // the four corners define - the top of the card on one photo, the Rating box
+  // on the next - slides right off its bubbles. 2mm is still under half the
+  // 3.8mm gap between structure rows, so a group can never lock onto its
+  // neighbour's ink.
   const per = groups.map(g => {
     const probes = ringProbes(g.items);
-    const r = searchOffset(img, probes, g0.dx, g0.dy, 0.8*SC, 0.1*SC);
-    return { dx:r.dx, dy:r.dy };
-  });
+    const r = searchOffset(img, probes, g0.dx, g0.dy, 2.0*SC, 0.2*SC);
+    return searchOffset(img, probes, r.dx, r.dy, 0.3*SC, 0.1*SC);
+  }).map(r => ({ dx:r.dx, dy:r.dy }));
   return { global:{ dx:g0.dx, dy:g0.dy }, per };
 }
 
@@ -414,6 +674,33 @@ function groupFills(img, items, paperHint, off){
   // close to plain paper, so refuse a reference far darker than that.
   const ref = Math.max(Math.max.apply(null, inner), paperHint * 0.72);
   return inner.map(v => Math.max(0, (ref - v) / Math.max(1, ref)));
+}
+
+// Is there actually a printed line where one is expected? Walk the segment and,
+// at each step, take the darkest pixel within a millimetre or so across it - a
+// line that is a hair out of place still registers, a line that is not there at
+// all does not. Compared against local paper rather than a fixed cut, so a dim
+// photo does not read as "no line".
+function lineDarkness(img, a, b, vertical){
+  const N = 32, mins = [], paper = [];
+  for (let i = 0; i <= N; i++){
+    const t = i/N;
+    const cx = (a.x + (b.x-a.x)*t) * SC, cy = (a.y + (b.y-a.y)*t) * SC;
+    let lo = 255;
+    for (let d = -1.2*SC; d <= 1.2*SC; d++){
+      const x = Math.round(cx + (vertical ? d : 0)), y = Math.round(cy + (vertical ? 0 : d));
+      if (x<0||y<0||x>=img.width||y>=img.height) continue;
+      const k = (y*img.width+x)*4;
+      const v = lum(img.data[k], img.data[k+1], img.data[k+2]);
+      if (v < lo) lo = v;
+      paper.push(v);
+    }
+    mins.push(lo);
+  }
+  paper.sort((x,y)=>x-y);
+  const ref = paper[Math.floor(paper.length*0.85)] || 255;
+  mins.sort((x,y)=>x-y);
+  return mins[Math.floor(mins.length/2)] / Math.max(1, ref);   // <1 means dark
 }
 
 function meanLumAt(img, cx, cy, rPx){
@@ -473,29 +760,91 @@ const handles = { tl:document.getElementById("h-tl"), tr:document.getElementById
                   bl:document.getElementById("h-bl"), br:document.getElementById("h-br") };
 let corners = null;
 
+// The four reference points, in mm: the corner squares normally, the printed
+// rules when the squares never made it onto the paper.
+function refPoints(){
+  return (noMarks && ANCHORS) ? ANCHORS : MARK;
+}
+
 function layoutHandles(){
   for (const k in handles){
     handles[k].style.left = (corners[k].x / srcCanvas.width * 100) + "%";
     handles[k].style.top  = (corners[k].y / srcCanvas.height * 100) + "%";
   }
 }
+const loupe = document.getElementById("loupe");
+const loupeCtx = loupe.getContext("2d");
+const LOUPE_PX = 132, LOUPE_ZOOM = 5;
+
+// Show the photo's own pixels under the handle, magnified, with a crosshair at
+// the exact point the homography will use.
+function drawLoupe(cx, cy){
+  loupe.width = LOUPE_PX; loupe.height = LOUPE_PX;
+  const span = LOUPE_PX / LOUPE_ZOOM;
+  loupeCtx.imageSmoothingEnabled = false;
+  loupeCtx.fillStyle = "#fff";
+  loupeCtx.fillRect(0, 0, LOUPE_PX, LOUPE_PX);
+  loupeCtx.drawImage(srcCanvas, cx - span/2, cy - span/2, span, span, 0, 0, LOUPE_PX, LOUPE_PX);
+  loupeCtx.strokeStyle = "#00B050"; loupeCtx.lineWidth = 1;
+  loupeCtx.beginPath();
+  loupeCtx.moveTo(LOUPE_PX/2, 0); loupeCtx.lineTo(LOUPE_PX/2, LOUPE_PX);
+  loupeCtx.moveTo(0, LOUPE_PX/2); loupeCtx.lineTo(LOUPE_PX, LOUPE_PX/2);
+  loupeCtx.stroke();
+  loupe.hidden = false;
+}
+
 for (const k in handles){
   const el = handles[k];
   el.addEventListener("pointerdown", e => {
     e.preventDefault(); el.setPointerCapture(e.pointerId);
+    // Keep the loupe out of the way of the handle being dragged.
+    loupe.style.right = k.endsWith("r") ? "auto" : ".5rem";
+    loupe.style.left  = k.endsWith("r") ? ".5rem" : "auto";
     const move = ev => {
       const r = document.getElementById("stage").getBoundingClientRect();
       const fx = Math.min(1, Math.max(0, (ev.clientX-r.left)/r.width));
       const fy = Math.min(1, Math.max(0, (ev.clientY-r.top)/r.height));
       corners[k] = { x:fx*srcCanvas.width, y:fy*srcCanvas.height };
       el.style.left = (fx*100)+"%"; el.style.top = (fy*100)+"%";
+      drawLoupe(corners[k].x, corners[k].y);
     };
     const up = ev => { el.releasePointerCapture(ev.pointerId);
+      loupe.hidden = true;
       el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); };
+    drawLoupe(corners[k].x, corners[k].y);
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
   });
 }
+
+// A whole stack of cards prints the same way, so remember the choice rather
+// than making the operator re-tick it for every card they photograph.
+const noMarksBox = document.getElementById("nomarks");
+const aimHint = document.getElementById("aimHint");
+function setNoMarks(on, remember){
+  noMarks = !!on;
+  noMarksBox.checked = noMarks;
+  aimHint.hidden = !noMarks;
+  if (remember){ try { localStorage.setItem("cardv2-nomarks", noMarks ? "1" : "0"); } catch(e){} }
+}
+noMarksBox.addEventListener("change", () => {
+  setNoMarks(noMarksBox.checked, true);
+  if (srcCanvas.width) loadImage(srcCanvas.toDataURL("image/jpeg", 0.92));   // re-place the handles
+});
+const sideSel = document.getElementById("sideSel");
+function setForcedSide(v, remember){
+  forcedSide = (v === "white" || v === "red") ? v : "";
+  sideSel.value = forcedSide;
+  if (remember){ try { localStorage.setItem("cardv2-side", forcedSide); } catch(e){} }
+}
+sideSel.addEventListener("change", () => setForcedSide(sideSel.value, true));
+let storedSide = null;
+try { storedSide = localStorage.getItem("cardv2-side"); } catch(e){}
+setForcedSide(storedSide || "", false);
+
+let storedNoMarks = null;
+try { storedNoMarks = localStorage.getItem("cardv2-nomarks"); } catch(e){}
+setNoMarks(new URLSearchParams(location.search).get("nomarks") === "1" || storedNoMarks === "1", false);
 
 function loadImage(src){
   const im = new Image();
@@ -507,28 +856,64 @@ function loadImage(src){
     srcCtx.drawImage(im, 0, 0, srcCanvas.width, srcCanvas.height);
     document.getElementById("stage").classList.add("on");
     const img = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
-    const W = 0.34;
-    const f = { tl:findMark(img,0,W,0,W), tr:findMark(img,1-W,1,0,W),
-                bl:findMark(img,0,W,1-W,1), br:findMark(img,1-W,1,1-W,1) };
-    const missing = Object.keys(f).filter(k=>!f[k]);
-    corners = {
-      tl: f.tl || {x:srcCanvas.width*.08, y:srcCanvas.height*.08},
-      tr: f.tr || {x:srcCanvas.width*.92, y:srcCanvas.height*.08},
-      bl: f.bl || {x:srcCanvas.width*.08, y:srcCanvas.height*.92},
-      br: f.br || {x:srcCanvas.width*.92, y:srcCanvas.height*.92},
-    };
+    let missing = [];
+    if (noMarks){
+      // Find the card by its printed rules. If that fails, fall back to where
+      // the anchors would be if the card filled the frame - a starting point
+      // for the handles rather than an answer.
+      const auto = autoAnchors(img);
+      if (auto){
+        corners = auto;
+      } else {
+        const A = ANCHORS || MARK;
+        corners = {};
+        for (const k of ["tl","tr","bl","br"])
+          corners[k] = { x:srcCanvas.width * (A[k].x/SHEET_W), y:srcCanvas.height * (A[k].y/SHEET_H) };
+        missing = ["tl","tr","bl","br"];
+      }
+    } else {
+      const W = 0.34;
+      const f = { tl:findMark(img,0,W,0,W), tr:findMark(img,1-W,1,0,W),
+                  bl:findMark(img,0,W,1-W,1), br:findMark(img,1-W,1,1-W,1) };
+      missing = Object.keys(f).filter(k=>!f[k]);
+      corners = {
+        tl: f.tl || {x:srcCanvas.width*.08, y:srcCanvas.height*.08},
+        tr: f.tr || {x:srcCanvas.width*.92, y:srcCanvas.height*.08},
+        bl: f.bl || {x:srcCanvas.width*.08, y:srcCanvas.height*.92},
+        br: f.br || {x:srcCanvas.width*.92, y:srcCanvas.height*.92},
+      };
+    }
     layoutHandles();
     readBtn.disabled = !MAP;
     window.__cornersReady = true;
+    // Test hooks. __anchorsInPhoto answers "if the operator dragged the four
+    // handles perfectly onto the printed rules, where would they be?" — which
+    // lets a photo whose squares DID print drive the no-squares path, and the
+    // two reads be compared. See scripts/test-scan-v2-nomarks.mjs.
+    window.__setCorners = c => { corners = c; layoutHandles(); };
+    window.__autoAnchors = () => autoAnchors(srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height));
+    window.__setNoMarks = on => setNoMarks(on, false);
+    window.__anchorsInPhoto = () => {
+      const H = solveH({ tl:{x:MARK.tl.x*SC,y:MARK.tl.y*SC}, tr:{x:MARK.tr.x*SC,y:MARK.tr.y*SC},
+                         bl:{x:MARK.bl.x*SC,y:MARK.bl.y*SC}, br:{x:MARK.br.x*SC,y:MARK.br.y*SC} },
+                       corners);
+      const out = {};
+      for (const k of ["tl","tr","bl","br"]) out[k] = applyH(H, ANCHORS[k].x*SC, ANCHORS[k].y*SC);
+      return out;
+    };
     const auto = new URLSearchParams(location.search).get("auto") === "1";
     if (!MAP){
       statusEl.textContent = "Photo loaded — waiting for the card layout…";
       if (auto) window.__autoPending = true;
       return;
     }
-    statusEl.textContent = missing.length
-      ? ("Found " + (4-missing.length) + "/4 corners — drag " + missing.join(", ") + " onto the black squares.")
-      : "Found all 4 corners. Check the handles, then read.";
+    statusEl.textContent = noMarks
+      ? (missing.length
+          ? "Couldn't find the card's printed lines — put the handles on them (see above), then read."
+          : "Found the card on its printed lines. Check the handles, then read.")
+      : missing.length
+        ? ("Found " + (4-missing.length) + "/4 corners — drag " + missing.join(", ") + " onto the black squares.")
+        : "Found all 4 corners. Check the handles, then read.";
     if (auto) run();
   };
   im.onerror = () => { statusEl.textContent = "Could not load that photo."; };
@@ -547,8 +932,9 @@ function run(){
   if (!MAP){ statusEl.textContent = "Still loading the card layout — try again in a second."; return; }
   if (!corners){ statusEl.textContent = "Choose a photo first."; return; }
   // rectify: map the four found marks onto their true positions
-  const H = solveH({ tl:{x:MARK.tl.x*SC,y:MARK.tl.y*SC}, tr:{x:MARK.tr.x*SC,y:MARK.tr.y*SC},
-                     bl:{x:MARK.bl.x*SC,y:MARK.bl.y*SC}, br:{x:MARK.br.x*SC,y:MARK.br.y*SC} },
+  const REF = refPoints();
+  const H = solveH({ tl:{x:REF.tl.x*SC,y:REF.tl.y*SC}, tr:{x:REF.tr.x*SC,y:REF.tr.y*SC},
+                     bl:{x:REF.bl.x*SC,y:REF.bl.y*SC}, br:{x:REF.br.x*SC,y:REF.br.y*SC} },
                    corners);
   dstCanvas.width = DST_W; dstCanvas.height = DST_H;
   const src = srcCtx.getImageData(0,0,srcCanvas.width,srcCanvas.height);
@@ -574,11 +960,28 @@ function run(){
   // the whole card shifts and every row is off by one. A 6mm registration
   // square must be solid black at each corner of the rectified image — if it
   // isn't, that corner was not the mark, and no reading is trustworthy.
-  const badMarks = ["tl","tr","bl","br"].filter(k => {
-    const m = MARK[k];
-    const v = meanLumAt(img, m.x*SC, m.y*SC, 1.6*SC);
-    return v > 130;                       // a solid mark reads far darker
-  });
+  // Without the squares the same proof comes from the rules the card WAS lined
+  // up on: the title rule and the three sides of the Rating box must land on
+  // real printed ink. A quad dragged onto the wrong things fails this the same
+  // way a missed corner square does.
+  const badMarks = noMarks
+    ? (() => {
+        const A = refPoints();
+        const upL = { x:A.bl.x, y:A.bl.y - 8 }, upR = { x:A.br.x, y:A.br.y - 8 };
+        const checks = [
+          ["the title rule",           lineDarkness(img, A.tl, A.tr, false)],
+          ["the Rating box's bottom",  lineDarkness(img, A.bl, A.br, false)],
+          ["the Rating box's left side",  lineDarkness(img, A.bl, upL, true)],
+          ["the Rating box's right side", lineDarkness(img, A.br, upR, true)],
+        ];
+        window.__lineFit = checks.map(c => c[0] + " " + c[1].toFixed(2));
+        return checks.filter(c => c[1] > 0.75).map(c => c[0]);
+      })()
+    : ["tl","tr","bl","br"].filter(k => {
+        const m = MARK[k];
+        const v = meanLumAt(img, m.x*SC, m.y*SC, 1.6*SC);
+        return v > 130;                   // a solid mark reads far darker
+      });
   if (badMarks.length){
     window.__lastRun = { error:"marks", badMarks };
     capture({ error:"marks", badMarks });
@@ -587,12 +990,18 @@ function run(){
       `<div class="card"><div class="hdr"><span class="big">Can\u2019t read this photo</span>
        <span class="t">card-v2</span></div>
        <p style="font-size:.9rem;line-height:1.55;margin:.2rem 0 .6rem">
-       The <b>${badMarks.join(", ")}</b> corner square${badMarks.length>1?"s were":" was"} not found
-       where ${badMarks.length>1?"they":"it"} should be, so the card is not lined up and every
-       row would be read off by a few millimetres.</p>
+       ${noMarks
+         ? `<b>${badMarks.join(", ")}</b> did not land on printed ink, so the card is not lined
+            up and every row would be read off by a few millimetres.`
+         : `The <b>${badMarks.join(", ")}</b> corner square${badMarks.length>1?"s were":" was"} not found
+            where ${badMarks.length>1?"they":"it"} should be, so the card is not lined up and every
+            row would be read off by a few millimetres.`}</p>
        <p style="font-size:.9rem;line-height:1.55;margin:0">
-       Retake the photo with <b>all four black squares visible</b>, straight on and with the whole
-       card in frame \u2014 or drag the green handles onto the squares and read again.</p></div>`;
+       ${noMarks
+         ? `Drag the top handles onto the two <b>ends of the long line under \u201CWine Card\u201D</b>
+            and the bottom two onto the <b>bottom corners of the \u201CRating\u201D box</b>, then read again.`
+         : `Retake the photo with <b>all four black squares visible</b>, straight on and with the whole
+            card in frame \u2014 or drag the green handles onto the squares and read again.`}</p></div>`;
     statusEl.textContent = "Corners not lined up — nothing read.";
     return;
   }
@@ -602,8 +1011,14 @@ function run(){
   // One square is solid and one hollow, printed together under the same light,
   // so their difference is the reliable signal - an absolute cut fails the
   // moment a photo is dim enough to lift the hollow one.
-  const side = (probe[0] - probe[1] > 0.30) ? "white"
-             : (probe[1] - probe[0] > 0.30) ? "red" : null;
+  const detected = (probe[0] - probe[1] > 0.30) ? "white"
+                 : (probe[1] - probe[0] > 0.30) ? "red" : null;
+  // The two sides carry different flavour vocabularies but identical geometry,
+  // so nothing in the photo distinguishes them except that little code — and on
+  // a card that printed without its solid squares there is no code to read. Get
+  // it wrong and the card reads cleanly under the wrong words, which is worse
+  // than not reading it. So the operator can pin the side for a batch.
+  const side = forcedSide || detected;
   const sheet = MAP[side || "white"];
 
   // read everything first, so the threshold comes from this card's own spread
@@ -618,7 +1033,13 @@ function run(){
   const T = adaptiveThreshold(raw.flat());
 
   const groups = sheet.groups.map((g, gi) => {
-    const reads = g.items.map((it, ii) => ({ label:it.label, fill:raw[gi][ii] }));
+    const off = fit.per[gi];
+    const reads = g.items.map((it, ii) => ({
+      label: it.label,
+      fill: raw[gi][ii],
+      lum: +meanLumAt(img, it.x*SC + off.dx, it.y*SC + off.dy, Math.max(2, it.d*0.28*SC)).toFixed(1),
+      at: [+(it.x + off.dx/SC).toFixed(2), +(it.y + off.dy/SC).toFixed(2)],
+    }));
     const hits = reads.filter(r => r.fill >= T.hi);
     const maybes = reads.filter(r => r.fill >= T.lo && r.fill < T.hi);
     let value = null, flag = null;
@@ -650,7 +1071,7 @@ function run(){
   });
 
   window.__rectifiedClean = rectifiedClean;
-  const result = { side, sideProbe:probe, groups, threshold:T,
+  const result = { side, sideForced: !!forcedSide, sideProbe:probe, groups, threshold:T,
                    offset:{ dx:fit.global.dx/SC, dy:fit.global.dy/SC },
                    perGroupOffset: sheet.groups.map((g,gi) => ({
                      name:g.name, y:+g.items[0].y.toFixed(1),
@@ -688,7 +1109,38 @@ function run(){
 
 // When embedded in the app, hand the read up to the page around us. The parent
 // files it against a wine and a taster; this page stays usable standalone.
+// File the read directly. The page around us catches the same result by
+// postMessage and files it too - the two land on one row - but this path is
+// plain static JavaScript and keeps working when that page does not.
+function fileScan(result){
+  const eventId = new URLSearchParams(location.search).get("event");
+  if (!eventId || result.error) return;
+  const priceGroup = (result.groups || []).find(g => g.name.toLowerCase() === "price");
+  fetch("/api/scan", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventId, result,
+      buckets: priceGroup ? priceGroup.reads.map(r => r.label) : undefined }),
+  })
+    .then(r => r.json())
+    .then(j => {
+      const el = document.getElementById("filed");
+      if (!el) return;
+      el.hidden = false;
+      el.className = "filed " + (j.ok ? "ok" : "bad");
+      el.textContent = j.ok
+        ? `Filed: ${j.taster} → ${j.wine}`
+        : `Not filed — ${j.error || "the tasting would not take it"}`;
+    })
+    .catch(() => {
+      const el = document.getElementById("filed");
+      if (!el) return;
+      el.hidden = false; el.className = "filed bad";
+      el.textContent = "Not filed — could not reach the tasting.";
+    });
+}
+
 function announce(result){
+  fileScan(result);
   if (window.parent === window) return;
   const priceGroup = (result.groups || []).find(g => g.name.toLowerCase() === "price");
   window.parent.postMessage({
@@ -707,6 +1159,9 @@ function capture(result){
       ua: navigator.userAgent,
       photo: srcCanvas.toDataURL("image/jpeg", 0.85),
       rectified: window.__rectifiedClean || dstCanvas.toDataURL("image/jpeg", 0.85),
+      build: "18:48",
+      ruler: window.__ruler || null,
+      canvas: { src:[srcCanvas.width, srcCanvas.height], dst:[dstCanvas.width, dstCanvas.height] },
       result: result,
     });
     fetch("/_capture", { method:"POST", headers:{ "Content-Type":"application/json" }, body })
@@ -804,15 +1259,68 @@ function render(res){
   // hang boot forever, so race it against a timeout. Proceeding early is safe:
   // buildMap sanity-checks the rendered layout and we retry if it looks wrong,
   // so a late-arriving font corrects itself on the next pass.
+  // The card lays its INFO bubbles out around the taster names, so the map is
+  // only right if the ruler is rendering in the faces the card was printed in.
+  // Giving up on the fonts and measuring anyway is worse than waiting: it
+  // produces a map that looks fine and is millimetres out on those rows.
+  const facesReady = () =>
+    // Weights matter: the card only ever declares Fraunces at 500 and up, and a
+    // check at the default 400 answers "no" forever.
+    ["600 16px Fraunces", "400 16px 'IBM Plex Sans'", "400 16px 'IBM Plex Mono'"]
+      .every(f => { try { return doc.fonts.check(f); } catch (e){ return true; } });
+
   Promise.race([
     doc.fonts.ready.catch(() => {}),
     new Promise(res => setTimeout(res, 2500)),
-  ]).then(() => requestAnimationFrame(() => {
+  ]).then(() => new Promise(res => {
+    if (facesReady()) return res();
+    // Served from this origin, so this is a stall, not a dead end - keep going.
+    let waited = 0;
+    const tick = setInterval(() => {
+      if (facesReady() || (waited += 200) > 8000){ clearInterval(tick); res(); }
+    }, 200);
+  })).then(() => requestAnimationFrame(() => {
     let built = false;
     try { built = buildMap(); }
     catch (err){ return retry(err.message); }
     if (!built) return retry("ruler measured " + (window.__layoutGap||0).toFixed(1) + "mm gap, expected ~8.9mm");
+    // The scanner has to be told which card was printed - a different taster
+    // vocabulary puts the INFO bubbles somewhere else entirely. The options are
+    // read out of the ruler itself rather than listed again here.
+    (function fillCardPickers(){
+      const q = new URLSearchParams(location.search);
+      const idsSel = document.getElementById("idsSel"), winesSel = document.getElementById("winesSel");
+      if (q.get("embedded") === "1"){                // the event already knows
+        document.getElementById("cardSetup").hidden = true;
+        document.getElementById("cardWines").hidden = true;
+        return;
+      }
+      const refSel = doc.getElementById("idset");
+      if (refSel && !idsSel.options.length) idsSel.innerHTML = refSel.innerHTML;
+      idsSel.value = q.get("ids") || refSel && refSel.value || "house";
+      const wines = +(q.get("wines") || 4);
+      if (!winesSel.options.length)
+        winesSel.innerHTML = [2,3,4,5,6,7,8]
+          .map(n => `<option value="${n}">${n} — A to ${"ABCDEFGH"[n-1]}</option>`).join("");
+      winesSel.value = String(Math.min(8, Math.max(2, wines)));
+      const reloadWith = (k, v) => {
+        const u = new URL(location.href);
+        u.searchParams.set(k, v);
+        location.replace(u.toString());          // the ruler is rebuilt on load
+      };
+      idsSel.onchange = () => reloadWith("ids", idsSel.value);
+      winesSel.onchange = () => reloadWith("wines", winesSel.value);
+    })();
+
     window.__mapReady = true;
+    const idRow = MAP.white.groups.filter(g => g.name.toLowerCase() === "you are");
+    window.__ruler = {
+      dpr: window.devicePixelRatio,
+      facesReady: facesReady(),
+      fonts: [...doc.fonts].filter(f => f.status === "loaded")
+               .map(f => f.family).filter((v,i,a) => a.indexOf(v) === i),
+      idX: idRow.map(g => g.items.map(i => +i.x.toFixed(2))),
+    };
     // A photo may already be loaded and waiting: on a phone the layout usually
     // finishes second, and nothing else would ever re-enable the button.
     if (corners){

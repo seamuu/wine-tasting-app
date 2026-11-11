@@ -141,7 +141,11 @@ body:has(.deck) { overflow: hidden; }
              border-bottom: 1.5px solid var(--ink); padding-bottom: .5rem; }
 .deck-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
              color: var(--ink-soft); font-size: clamp(.68rem, 1.4vh, .82rem); }
-.deck-body { min-height: 0; min-width: 0; display: grid; gap: clamp(.7rem, 2vw, 2rem); }
+/* Designed not to scroll, but "does not fit" must never mean "cannot be read":
+   on a laptop window, a phone, or a slide with a long list, the body scrolls
+   rather than silently clipping the bottom off. */
+.deck-body { min-height: 0; min-width: 0; display: grid; gap: clamp(.7rem, 2vw, 2rem);
+             overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .deck-body > * { min-height: 0; min-width: 0; }
 
 .deck-title { font-family: var(--font-display), Georgia, serif; font-weight: 600; letter-spacing: -.02em;
@@ -153,7 +157,7 @@ body:has(.deck) { overflow: hidden; }
 
 .deck-panel { background: var(--paper-2); border: 1px solid var(--rule); border-radius: 12px;
               padding: clamp(.6rem, 1.6vh, 1.1rem) clamp(.7rem, 1.4vw, 1.2rem);
-              display: flex; flex-direction: column; gap: .45rem; min-height: 0; overflow: hidden; }
+              display: flex; flex-direction: column; gap: .45rem; min-height: 0; overflow-y: auto; }
 
 .deck-dot { display: inline-block; width: 7px; height: 7px; border-radius: 999px; background: var(--rule); }
 .deck-dot[data-on] { background: var(--claret); }
@@ -167,3 +171,33 @@ body:has(.deck) { overflow: hidden; }
 .row { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
 .spread { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
 .tabular { font-variant-numeric: tabular-nums; }
+
+/* ---- Phones ---------------------------------------------------------
+   The tabs are built as a wide column plus a sidebar. The sidebar asks for
+   at least 300px, which a phone cannot give it without the page scrolling
+   sideways and the two columns landing on top of each other, so below this
+   width everything stacks. Scanning happens on a phone, so this is not a
+   nice-to-have. */
+.split { display: grid; grid-template-columns: minmax(0,1fr) minmax(300px,360px);
+         gap: 2.5rem; align-items: start; }
+.split-even { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr);
+              gap: 2rem; align-items: start; }
+
+@media (max-width: 860px) {
+  .split, .split-even { grid-template-columns: minmax(0,1fr); gap: 1.5rem; }
+  /* A phone is not a projector: let the deck grow and the page scroll, rather
+     than squeezing a whole slide into a hand-sized viewport. */
+  .deck { position: static; min-height: 100dvh; overflow: visible; }
+  body:has(.deck) { overflow: auto; }
+  .page { padding: 1.25rem .9rem 3.5rem; }
+  .grid-wines { grid-template-columns: minmax(0,1fr) !important; }
+}
+
+/* A link acting as a button: it still needs to look and behave disabled at the
+   ends of the deck, and to sit on the text baseline like the real buttons. */
+a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+a.btn.is-disabled { opacity: .45; pointer-events: none; }
+
+/* Present for screen readers, out of the way visually. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+           overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

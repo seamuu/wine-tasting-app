@@ -4,9 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wine Card</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="fonts/card-fonts.css" rel="stylesheet">
 <style>
   :root{
     --backdrop:#F1ECE6; --chrome-ink:#241C18; --chrome-muted:#7A6F65;
@@ -55,7 +53,13 @@
     position:relative; font-family:"IBM Plex Sans", sans-serif; padding:9mm 10mm;
     display:flex; flex-direction:column;
   }
-  .reg{ position:absolute; width:6mm; height:6mm; background:var(--ink); }
+  /* The four squares the scanner rectifies from. Painted as BORDER, not
+     background: browsers drop background colours from print unless the user
+     ticks "Background graphics", and a card printed without its corner marks
+     cannot be scanned at all. A 6mm border-box filled by a 3mm border is a
+     solid square that always prints. print-color-adjust below is the second
+     belt; this is the one that does not depend on the browser honouring it. */
+  .reg{ position:absolute; width:6mm; height:6mm; border:3mm solid var(--ink); background:var(--ink); }
   .reg-tl{ top:5mm; left:5mm; } .reg-tr{ top:5mm; right:5mm; }
   .reg-bl{ bottom:5mm; left:5mm; } .reg-br{ bottom:5mm; right:5mm; }
 
@@ -95,7 +99,7 @@
   .side-lead{ display:flex; align-items:center; gap:2.8mm; }
   .side-code{ display:flex; gap:1.2mm; }
   .side-code i{ display:block; width:3mm; height:3mm; border:.35mm solid var(--ink); background:transparent; }
-  .side-code i.on{ background:var(--ink); }
+  .side-code i.on{ border-width:1.5mm; background:var(--ink); }  /* border-filled, so it survives printing without background graphics */
   .side-banner .hint{ font-family:"IBM Plex Mono", monospace; font-size:1.8mm; color:#5B534B; text-align:right; max-width:38mm; line-height:1.35; }
 
   /* twelve buckets across 128mm of usable width, so each column is ~9.5mm -
@@ -130,6 +134,14 @@
   .fb-item .bubble{ width:2.7mm; height:2.7mm; flex-shrink:0; }
   .fb-item span{ font-family:"IBM Plex Mono", monospace; font-size:1.5mm; line-height:1.65mm; color:#5B534B; text-align:center; white-space:nowrap; }
 
+  /* With the price round on the team sheet, the card has 12mm spare. It goes
+     into the aroma marks, which are the smallest on the card and so the ones a
+     photograph struggles with most: 2.7mm to 3.9mm is 44% more area to find.
+     Scoped to this mode, because at these sizes the price-on card overflows. */
+  body.no-price .fb-item .bubble{ width:3.9mm; height:3.9mm; }
+  body.no-price .flavor-box{ padding:1.4mm 1.3mm; gap:.55mm; }
+  body.no-price .fb-item{ gap:.5mm; }
+
   .overall{
     margin-top:2mm; padding:1.8mm 4mm; border:.4mm solid var(--ink); border-radius:1.5mm;
     display:grid; grid-template-columns:18mm 1fr; align-items:center; column-gap:3mm;
@@ -153,6 +165,15 @@
      Both cards on a face are identical, so it does not matter which way the
      duplex flip lands them: every physical card still gets white on one side
      and red on the other. */
+  /* ---- Marks-only pass -------------------------------------------
+     Rescue mode for a stack that came out of the printer without its
+     registration squares (backgrounds off in the print dialog). Everything
+     but the four .reg squares is hidden, so the already-printed sheets can
+     be fed back through and get only the marks added, in exactly the right
+     places. The four marks are symmetric about the sheet centre, so it does
+     not matter which way round the paper goes back in. */
+  body.marks-only .sheet > *:not(.reg){ visibility:hidden; }
+
   #a4-pages{ display:none; }
   .a4-page{ width:297mm; height:210mm; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#fff; }
   .a4-page + .a4-page{ page-break-before:always; }
@@ -161,6 +182,9 @@
   .a4-cut::before{ content:""; position:absolute; left:50%; top:0; bottom:0; border-left:.2mm dashed #B9B0A6; }
 
   @media print{
+    /* Ask for backgrounds too, so the tier rules and solid fills come through
+       even though the marks above no longer depend on it. */
+    *{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body{ background:#FFFFFF; }
     .chrome-head, .toolbar, .legend, .sheet-caption{ display:none; }
     .page{ padding:0; gap:0; max-width:none; }
@@ -197,6 +221,16 @@
         <span style="font-weight:400;color:var(--chrome-muted);font-size:.78rem;">Wines</span>
         <select id="winecount" style="font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;"></select>
       </label>
+      <label class="btn btn-ghost" style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <span style="font-weight:400;color:var(--chrome-muted);font-size:.78rem;">Price round</span>
+        <select id="priceround" style="font:inherit;font-size:.82rem;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;">
+          <option value="1">On the card</option>
+          <option value="0">On the team sheet</option>
+        </select>
+      </label>
+      <button class="btn btn-ghost" onclick="printAs('a4', false, 'white')" title="Both faces white, so a duplex sheet cuts into two white-only cards.">Print A4 — white only</button>
+      <button class="btn btn-ghost" onclick="printAs('a4', false, 'red')" title="Both faces red, so a duplex sheet cuts into two red-only cards.">Print A4 — red only</button>
+      <button class="btn btn-ghost" onclick="printAs('a4', true)" title="For sheets that printed without their corner squares: feed them back in and print this on top.">Corner marks only — A4</button>
       <span class="btn btn-ghost" style="cursor:default;">Structure — 1–5 · Rating — 1–10</span>
     </div>
 
@@ -278,6 +312,9 @@
   // make it read only the first group and never see the later letters.
   const ALL_LETTERS = ["A","B","C","D","E","F","G","H"];
   let wineCount = Math.min(8, Math.max(2, parseInt(params.get("wines"), 10) || 4));
+  // Off when price is being guessed as a team on the quiz sheet rather than
+  // individually here; the freed height goes to the aroma bubbles.
+  let withPrice = params.get("price") !== "0";
   let WINE_LETTERS = ALL_LETTERS.slice(0, wineCount);
 
   function sheetHTML(side){
@@ -314,13 +351,14 @@
         </div>
       </div>
 
+      ${withPrice ? `
       <div class="block">
         <div class="block-header"><span class="name">Price</span><span class="tag">your guess · NOK</span></div>
         <div class="price-row">
           ${bubbleItemsVertical(["<150","150–169","170–189","190–209","210–229","230–249",
                                  "250–269","270–289","290–309","310–329","330–349","350+"])}
         </div>
-      </div>
+      </div>` : ""}
 
       <div class="block">
         <div class="block-header"><span class="name">Structure</span><span class="tag">score 1–5</span></div>
@@ -409,11 +447,19 @@
 
   // Same generator feeds the imposed pages, so the two-up sheets can never
   // drift from the single-card ones.
+  // Which side goes on each A4 face. Normally one of each, so a card is white
+  // on the front and red on the back and serves either wine. Set to a single
+  // side when the flight is being printed as separate white and red stacks -
+  // then BOTH faces of the sheet are that side, and duplex prints it twice.
+  let onlySide = null;
+
   function renderAll(){
+    document.body.classList.toggle("no-price", !withPrice);
     document.getElementById("sheet-white").innerHTML = sheetHTML("white");
     document.getElementById("sheet-red").innerHTML = sheetHTML("red");
-    ["a4-w1","a4-w2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML("white"));
-    ["a4-r1","a4-r2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML("red"));
+    const face1 = onlySide || "white", face2 = onlySide || "red";
+    ["a4-w1","a4-w2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML(face1));
+    ["a4-r1","a4-r2"].forEach(id => document.getElementById(id).innerHTML = sheetHTML(face2));
   }
   renderAll();
 
@@ -425,6 +471,16 @@
     const u = new URL(location.href);
     u.searchParams.set("ids", idSet);
     history.replaceState(null, "", u);      // so the print/PDF keeps the choice
+    renderAll();
+  });
+
+  const pricePicker = document.getElementById("priceround");
+  pricePicker.value = withPrice ? "1" : "0";
+  pricePicker.addEventListener("change", e => {
+    withPrice = e.target.value === "1";
+    const u = new URL(location.href);
+    u.searchParams.set("price", withPrice ? "1" : "0");
+    history.replaceState(null, "", u);
     renderAll();
   });
 
@@ -442,23 +498,31 @@
   });
 
   // @page size cannot be toggled by a class, so the rule itself is rewritten.
-  function printAs(mode){
+  function printAs(mode, marksOnly, side){
+    onlySide = (side === "white" || side === "red") ? side : null;
+    renderAll();
     const a4 = mode === "a4";
     document.getElementById("pagerule").textContent =
       a4 ? "@page{ size:A4 landscape; margin:0; }" : "@page{ size:A5; margin:0; }";
     document.body.classList.toggle("mode-a4", a4);
+    document.body.classList.toggle("marks-only", !!marksOnly);
     window.print();
   }
   window.printAs = printAs;
 
   // ?print=a4 renders the imposed layout directly — used to export the PDF.
-  const wanted = new URLSearchParams(location.search).get("print");
+  // ?marks=1 exports the marks-only rescue pass instead of the whole card.
+  const printParams = new URLSearchParams(location.search);
+  const wanted = printParams.get("print");
   if (wanted === "a4" || wanted === "a5"){
     const a4 = wanted === "a4";
     document.getElementById("pagerule").textContent =
       a4 ? "@page{ size:A4 landscape; margin:0; }" : "@page{ size:A5; margin:0; }";
     document.body.classList.toggle("mode-a4", a4);
   }
+  if (printParams.get("marks") === "1") document.body.classList.add("marks-only");
+  const onlyParam = printParams.get("only");
+  if (onlyParam === "white" || onlyParam === "red"){ onlySide = onlyParam; renderAll(); }
 </script>
 </body>
 </html>
