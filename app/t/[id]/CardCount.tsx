@@ -15,5 +15,5 @@ export default function CardCount({ eventId, position, initial, expected, remain
     window.addEventListener("wine-flight:card-count", update);
     return () => window.removeEventListener("wine-flight:card-count", update);
   }, [eventId, position]);
-  return remaining ? <>{count >= expected && expected > 0 ? "All cards collected. Ready for team answers." : `${Math.max(0, expected - count)} cards still to collect.`}</> : <>{count}/{expected} cards</>;
+  return remaining ? <>{count} {count === 1 ? "card" : "cards"} collected. You can continue now.</> : <>{count}/{expected} cards</>;
 }

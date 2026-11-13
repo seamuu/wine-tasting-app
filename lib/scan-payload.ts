@@ -7,6 +7,7 @@ export type WineRow = { position: string; name: string; side: string; count: num
 /** Shape scan-v2.html posts up after it reads a card. */
 type ScanGroup = { name: string; kind: "one" | "many"; value: string | string[] | null; flag: string | null };
 export type ScanResult = {
+  scanId?: string;
   side: "white" | "red" | null;
   groups: ScanGroup[];
   error?: string;
@@ -60,8 +61,7 @@ export function toPayload(eventId: string, r: ScanResult, buckets: string[], win
   const resolved = resolveWine(winePos as Position, r.side, wines);
   if (!resolved)
     return { error: `Nothing in this tasting matches ${r.side ?? ""} ${winePos}`.replace(/\s+/g, " ") };
-  if (you.length < 2 || typeof you[0].value !== "string" || typeof you[1].value !== "string")
-    return { error: "The taster bubbles weren't both marked, so this card can't be filed." };
+  const hasName = you.length >= 2 && you.slice(0, 2).every(g => typeof g.value === "string" && g.value.trim() && !g.flag);
 
   const priceLabel = one("price")?.value;
   const priceBucket = typeof priceLabel === "string"
@@ -75,13 +75,14 @@ export function toPayload(eventId: string, r: ScanResult, buckets: string[], win
     }
   }
 
-  const flags = r.groups.filter((g) => g.flag).map((g) => `${g.name}: ${g.flag}`);
+  const flags = r.groups.filter((g) => g.flag && g.name.toLowerCase() !== "you are").map((g) => `${g.name}: ${g.flag}`);
 
   return {
     eventId,
     winePosition: resolved,
-    idA: you[0].value,
-    idB: you[1].value,
+    idA: hasName ? you[0].value as string : null,
+    idB: hasName ? you[1].value as string : null,
+    scanId: r.scanId,
     side: r.side === "red" ? "RED" : "WHITE",
     priceBucket: priceBucket >= 0 ? priceBucket : null,
     body: num(one("body")?.value ?? null),

@@ -5,6 +5,8 @@ import { saveManualCard } from "../../actions";
 import { PRICE_BUCKETS } from "@/lib/card";
 import { categoriesFor, TIERS, TIER_BLURB } from "@/lib/flavours";
 import { STRUCTURE } from "@/lib/tally";
+import { tasterLabel } from "@/lib/taster";
+import SubmitButton from "../../SubmitButton";
 
 type WineRow = { position: string; name: string; side: string };
 
@@ -50,16 +52,17 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
   return (
     <details className="card" style={{ marginTop: "1.2rem" }} open={!!fixing} id="manual-card">
       <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: ".9rem" }}>
-        {fixing ? `Fixing ${fixing.idA} ${fixing.idB}: wine ${fixing.position}` : "Type a card in by hand"}
+        {fixing ? `Fixing ${tasterLabel(fixing)}: wine ${fixing.position}` : "Type a card in by hand"}
       </summary>
       <p className="small" style={{ margin: ".6rem 0 1.2rem" }}>
         {fixing
           ? "Everything the scan read is filled in below. Change what is wrong and save: it replaces the card rather than adding another."
-          : "For a card the camera won\u2019t read. It files exactly like a scan, so if you get the photo working later it just replaces this."}
+          : "Enter the marks below. Names are optional."}
       </p>
 
       <form action={saveManualCard} className="stack" style={{ gap: "1.4rem" }}>
         <input type="hidden" name="eventId" value={eventId} />
+        {fixing && <input type="hidden" name="submissionId" value={fixing.id} />}
         {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
 
         <div className="stack" style={{ gap: ".7rem" }}>
@@ -80,7 +83,7 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
           </div>
 
           <div>
-            <span className="label">Who filled it in: {idSet.label}</span>
+            <span className="label">Who filled it in · optional</span>
             <div className="row" style={{ gap: "1rem", marginTop: ".35rem", alignItems: "flex-start" }}>
               <div className="chips">{idSet.a.map((c) => <Chip key={c} name="idA" value={c} label={c} defaultChecked={fixing?.idA === c} />)}</div>
               <div className="chips" style={{ paddingLeft: "1rem", borderLeft: "1px solid var(--rule)" }}>
@@ -158,8 +161,8 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
         </div>
 
         <div className="row">
-          <button className="btn btn-primary" type="submit">File this card</button>
-          <span className="small">Wine and both name bubbles are required; everything else can be blank.</span>
+          <SubmitButton>File this card</SubmitButton>
+          <span className="small">Choose the wine. Everything else is optional.</span>
         </div>
       </form>
     </details>

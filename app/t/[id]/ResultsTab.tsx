@@ -7,6 +7,7 @@ import {
 } from "@/lib/tally";
 import Wheel, { WheelLegend } from "./Wheel";
 import { Histogram, PriceSpread, StructureStrips } from "./Charts";
+import { isUnnamedTaster } from "@/lib/taster";
 
 /**
  * The long version, for afterwards. Unlike the present deck this is allowed to
@@ -24,6 +25,7 @@ export default function ResultsTab({ event }: {
   const played = event.wines.filter((w) => w.submissions.length > 0);
   const standings = leaderboard(event.wines);
   const awards = superlatives(event.wines);
+  const namedTasters = event.tasters.filter(t => !isUnnamedTaster(t));
 
   if (played.length === 0) {
     return (
@@ -189,14 +191,14 @@ export default function ResultsTab({ event }: {
         );
       })}
 
-      {event.tasters.length > 0 && (
+      {namedTasters.length > 0 && (
         <section>
           <div className="section-title">Who&rsquo;s who</div>
           <p className="lede" style={{ marginBottom: ".9rem" }}>
             Add people’s names to show them alongside their card names.
           </p>
           <div className="grid-wines" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))" }}>
-            {event.tasters.map((t) => (
+            {namedTasters.map((t) => (
               <form key={t.id} action={nameTaster} className="row" style={{ gap: ".45rem" }}>
                 <input type="hidden" name="tasterId" value={t.id} />
                 <span className="pill" style={{ whiteSpace: "nowrap" }}>{t.idA} {t.idB}</span>

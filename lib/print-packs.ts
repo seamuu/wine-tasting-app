@@ -11,7 +11,7 @@ export const TASTING_CARD_PDFS = [
 export const PRINT_PDFS = [
   { file: "quiz-pack.pdf", title: "Quiz pack", instruction: "2 copies, single-sided." },
   { file: "map-master.pdf", title: "Map", instruction: "2 copies, colour." },
-  { file: "name-badges.pdf", title: "Name tags", instruction: "1 A4 sheet, single-sided. Cut out 8 tags; 2 spare." },
+  { file: "name-badges.pdf", title: "Name tags", instruction: "Optional. 1 A4 sheet, single-sided. Eight tags with everyone’s assigned pair." },
 ] as const;
 
 export function printFileUrl(id: string, file: string) {

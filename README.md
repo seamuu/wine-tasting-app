@@ -27,6 +27,13 @@ facts come from Vinmonopolet’s embedded product JSON, with manual corrections
 available; generating bottle facts with AI is not required. The imported notes
 remain in their original Norwegian.
 
+Names are optional on tasting cards. A complete colour-and-animal pair links a
+person’s cards across wines. A card without a complete pair is saved separately
+as an unnamed card and still counts towards the wine’s aromas, structure and
+ratings. Unnamed cards are excluded from individual leaderboards. Retrying the
+same scan does not create another card. You can continue to team answers with
+any number of cards, including zero; the expected count is only a guide.
+
 Team points are factual quiz answers: one point per correct match. Personal
 ratings determine the room’s favourite wines and never add team points. The
 standings show totals, average points per revealed wine, category leaders,

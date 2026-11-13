@@ -1208,6 +1208,14 @@ function chooseNextCard(){
 async function fileScan(result){
   const eventId = new URLSearchParams(location.search).get("event");
   if (!eventId || !result || result.error || reviewState === "saving" || reviewState === "saved") return;
+  if (!result.scanId) {
+    // getRandomValues also works on the local HTTP phone-scanning setup.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = bytes[6] & 15 | 64; bytes[8] = bytes[8] & 63 | 128;
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    result.scanId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+    rememberRead(result);
+  }
   setReviewState("saving");
   notifyParent("card-v2-saving");
   const el = document.getElementById("filed");
@@ -1265,12 +1273,12 @@ function render(res){
   const one = x => (x && x.value) ? esc(x.value) : "<span class='flag'>not marked</span>";
   const parts = n => res.groups.filter(x => x.name.toLowerCase() === n.toLowerCase());
   const joined = n => { const gs = parts(n);
-    return gs.length && gs.every(x => x.value) ? { value: gs.map(x=>x.value).join(" ") } : null; };
+    return gs.length && gs.every(x => typeof x.value === "string" && x.value.trim() && !x.flag) ? { value: gs.map(x=>x.value).join(" ") } : null; };
   const you = joined("You are"), wine = g("Wine"), price = g("Price"), rating = g("Rating");
   const structure = ["Body","Acidity","Tannin","Sweetness","Alcohol"].map(g).filter(Boolean);
   const flavours = res.groups.filter(x => x.kind === "many");
   const marked = flavours.filter(f => f.value.length);
-  const flags = res.groups.filter(x => x.flag);
+  const flags = res.groups.filter(x => x.flag && x.name.toLowerCase() !== "you are");
 
   document.getElementById("results").innerHTML = `
     <div class="card">
@@ -1278,7 +1286,7 @@ function render(res){
         <span class="big">${res.side ? (res.side === "white" ? "White wine" : "Red wine") : "Side unknown"}</span>
         <span class="t">card-v2</span>
       </div>
-      <div class="row"><span class="k">Taster</span><span class="v">${one(you)}</span></div>
+      <div class="row"><span class="k">Taster · optional</span><span class="v">${you ? one(you) : "Unnamed card"}</span></div>
       <div class="row"><span class="k">Wine</span><span class="v">${one(wine)}</span></div>
       ${price ? `<div class="row"><span class="k">Price guess</span><span class="v">${one(price)}</span></div>` : ""}
       <div class="row"><span class="k">Rating</span><span class="v">${rating && rating.value ? esc(rating.value)+" / 10" : "<span class='flag'>not marked</span>"}</span></div>

@@ -13,6 +13,7 @@ import CollectionPanel from "../CollectionPanel";
 import { phoneScannerUrl } from "@/lib/phone-url";
 import QRCode from "qrcode";
 import CardCount from "../CardCount";
+import { tasterLabel } from "@/lib/taster";
 import TeamAnswers from "../TeamAnswers";
 import { WineStory, TastingResults, QuizResults, Standings } from "../RoundResults";
 
@@ -84,7 +85,7 @@ export default async function RunPage({ params, searchParams }: {
 
     {query.notice && NOTICES[query.notice] && <p className={`note ${query.notice === "saved" ? "note-olive" : ""}`} role="status">{NOTICES[query.notice]}</p>}
     {query.manual && <p className={`note ${query.manual === "saved" ? "note-olive" : ""}`} role="status">{
-      query.manual === "saved" ? "Tasting card saved." : query.manual === "who" ? "Mark both name bubbles to save the card." : "That wine is missing from this tasting."}</p>}
+      query.manual === "saved" ? "Tasting card saved." : query.manual === "who" ? "Names are optional. You can save an unnamed card." : "That wine is missing from this tasting."}</p>}
 
     <details className="round-history"><summary>Previous wines &amp; steps</summary>    <nav className="flight-progress" aria-label="Wines in the flight">
       {POSITIONS.slice(0, event.wineCount).map((position) => {
@@ -130,11 +131,11 @@ export default async function RunPage({ params, searchParams }: {
             fixing={{ ...fixing, position: selected.position, idA: fixing.taster.idA, idB: fixing.taster.idB }}
             wines={event.wines.map(wine => ({ position: wine.position, side: wine.side, name: wine.stage === "REVEALED" ? wine.name : "Bottle hidden", count: wine.submissions.length }))}
             recent={selected.submissions.map(card => ({ id: card.id, at: card.createdAt.toISOString(), position: selected.position, wine: "Bottle hidden",
-              taster: `${card.taster.idA} ${card.taster.idB}`, status: card.status, note: card.reviewNote }))} />
+              taster: tasterLabel(card.taster), status: card.status, note: card.reviewNote }))} />
             : <CollectionPanel key={selected.id} eventId={id} position={selected.position} phoneUrl={phoneUrl} qr={qr}
               initial={{ count: counts!.cards, expected: guests, reviewed: counts!.reviewed,
                 cards: selected.submissions.map(card => ({ id: card.id, at: card.createdAt.toISOString(), position: selected.position, wine: "Bottle hidden",
-                  taster: `${card.taster.idA} ${card.taster.idB}`, status: card.status, note: card.reviewNote })) }} />}
+                  taster: tasterLabel(card.taster), status: card.status, note: card.reviewNote })) }} />}
 
         </>}
         {step === "ANSWERS" && <TeamAnswers map={event.mapMode} eventId={id} wines={event.wines} wine={selected} teams={event.teams} canReveal={isLive} />}

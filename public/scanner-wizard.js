@@ -73,14 +73,14 @@
     find('wizardStepLabel').textContent = expected > 0 ? `${savedCount}/${expected} saved` : `${savedCount} saved`;
     const complete = expected > 0 && savedCount >= expected;
     const count = expected > 0 ? `${savedCount}/${expected} cards saved` : `${savedCount} cards saved`;
-    find('wizardWineCount').textContent = complete ? '✓ All cards scanned. You can close this screen.' : count;
+    find('wizardWineCount').textContent = complete ? '✓ All cards scanned. You can close this screen.' : `${count}. You can continue on the host screen at any time.`;
     find('wizardStart').textContent = complete ? 'Scan another card' : 'Scan a card';
     find('wizardSavedTitle').textContent = complete ? 'All cards scanned' : 'Card saved';
     find('wizardSavedWho').textContent = find('filed')?.textContent || '';
-    find('wizardSavedCount').textContent = complete ? `${count}. You can close this screen now.` : count;
+    find('wizardSavedCount').textContent = `${count}. You can finish scanning and continue on the host screen now.`;
     const next = find('nextCardBtn');
     if (next) { next.className = complete ? 'btn' : 'btn btn-primary'; next.textContent = complete ? 'Scan another card' : 'Scan next card'; }
-    done.hidden = !complete;
+    done.hidden = false;
   }
   function startNext() {
     if (reviewState === 'saving') return;

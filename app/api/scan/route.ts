@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { saveScan } from "@/app/actions";
 import { toPayload, type ScanResult } from "@/lib/scan-payload";
 import { PRICE_BUCKETS, POSITIONS, type Position } from "@/lib/card";
+import { tasterLabel } from "@/lib/taster";
 
 /** Lightweight live collection status; never refreshes the host's forms. */
 export async function GET(request: Request) {
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   } });
   if (!event?.wines.length) return NextResponse.json({ error: "Tasting or wine not found" }, { status: 404 });
   const cards = event.wines[0].submissions.map(card => ({ id: card.id, at: card.createdAt.toISOString(), position, wine: "Bottle hidden",
-    taster: `${card.taster.idA} ${card.taster.idB}`, status: card.status, note: card.reviewNote }));
+    taster: tasterLabel(card.taster), status: card.status, note: card.reviewNote }));
   return NextResponse.json({ count: cards.length, expected: event.teams.reduce((sum, team) => sum + team.memberCount, 0),
     reviewed: cards.filter(card => card.status === "NEEDS_REVIEW").length, cards }, { headers: { "Cache-Control": "no-store" } });
 }
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   if (!res.ok) return NextResponse.json(res, { status: 409 });
   const wine = await prisma.wine.findUniqueOrThrow({ where: { eventId_position: { eventId: body.eventId, position: payload.winePosition } } });
   const [submission, count, teamSizes] = await Promise.all([
-    prisma.submission.findFirstOrThrow({ where: { wineId: wine.id, taster: { idA: payload.idA, idB: payload.idB } } }),
+    prisma.submission.findUniqueOrThrow({ where: { id: res.submissionId } }),
     prisma.submission.count({ where: { wineId: wine.id } }),
     prisma.team.aggregate({ where: { eventId: body.eventId }, _sum: { memberCount: true } }),
   ]);

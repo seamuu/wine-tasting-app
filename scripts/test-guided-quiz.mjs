@@ -109,6 +109,73 @@ try {
   assert.equal(JSON.stringify(liveCollection).includes('Practice white'),false,'live progress must not expose the bottle');
   await host.screenshot(path.join(directory,'00-host-all-cards.png'));
   note('Separate phone scanner and laptop dashboard sync live; all cards collected appears on both after the second confirmed practice card');
+
+  // Missing names save as independent cards, while retries keep the same card.
+  const unnamed = await practiceScanner('JSON.parse(JSON.stringify(window.__lastRun))');
+  delete unnamed.scanId;
+  unnamed.groups = unnamed.groups.map(g => g.name.toLowerCase() === 'you are' ? { ...g, value: null, flag: 'not marked' } : g);
+  await practiceScanner(`window.__lastRun=${JSON.stringify(unnamed)};render(window.__lastRun)`);
+  assert.equal(await practiceScanner("document.querySelector('#results').textContent.includes('Unnamed card')"), true);
+  await practiceScanner("document.getElementById('confirmBtn').click()");
+  await until(() => practiceScanner("document.documentElement.dataset.scanStep==='saved' && savedCount===3"), 'unnamed phone scan saved');
+  const posted = await practiceScanner('JSON.parse(JSON.stringify(window.__lastRun))');
+  const postUnnamed = async result => {
+    const response = await fetch(`${base}/api/scan`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventId: practice.id, expectedPosition: 'A', result }) });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const retry = await postUnnamed(posted);
+  assert.equal(retry.count, 3);
+  assert.equal(retry.taster, 'Unnamed card');
+  assert.ok(!retry.card.note?.includes('You are'));
+  const second = await postUnnamed({ ...posted, scanId: crypto.randomUUID() });
+  assert.equal(second.count, 4);
+  assert.notEqual(second.card.id, retry.card.id);
+  assert.equal((await postUnnamed(posted)).card.id, retry.card.id);
+  assert.equal((await db.query('SELECT count(*) AS n FROM "Submission" WHERE "eventId"=$1', [practice.id])).rows[0].n, '4');
+  note('Blank names save from the phone; separate unnamed cards and retry idempotency preserve the named cards');
+
+  await host.navigate(`${base}/t/${practice.id}/run?wine=A&step=COLLECT&fix=${retry.card.id}`);
+  await host.waitText('Fixing Unnamed card');
+  await host.submit('#manual-card form', { rating: '9' }, 'File this card');
+  await host.waitText('Tasting card saved.');
+  assert.equal((await db.query('SELECT "rating" FROM "Submission" WHERE id=$1', [retry.card.id])).rows[0].rating, 9);
+  assert.equal((await db.query('SELECT count(*) AS n FROM "Submission" WHERE "eventId"=$1', [practice.id])).rows[0].n, '4');
+  note('Correcting an unnamed card requires no name and replaces the saved card');
+
+  // Only this disposable fixture is cleared to exercise zero-card progression.
+  await db.query('DELETE FROM "Submission" WHERE "eventId"=$1', [practice.id]);
+  await host.navigate(`${base}/t/${practice.id}/run`);
+  await host.waitText('0/2 cards');
+  await host.waitText('You can continue now.');
+  await host.submit('.round-footer form', {}, 'Team answers →');
+  await host.waitText('What did each team pick?');
+  assert.equal((await db.query('SELECT "runStep" FROM "Event" WHERE id=$1', [practice.id])).rows[0].runStep, 'ANSWERS');
+  await host.submit('form:has(input[name=fromStep])', {}, 'Save & reveal wine A →');
+  await host.waitText('Practice white (fictional)');
+  for (const [label, nextLabel] of [
+    ['Tasting results →', 'Quiz results →'], ['Quiz results →', 'Standings →'],
+    ['Standings →', 'Pour wine B →'], ['Pour wine B →', 'Team answers →'],
+  ]) {
+    await host.submit('.round-footer form', {}, label);
+    await until(() => host.evaluate(`[...document.querySelectorAll('.round-footer button')].some(b=>b.textContent===${JSON.stringify(nextLabel)}&&!b.disabled)`), 'next practice page');
+  }
+  await host.waitText('Pour wine B and pass out the cards.');
+  await phone.navigate(`${base}/t/${practice.id}/scan?wine=B`);
+  await phone.send('Page.bringToFront');
+  await until(() => practiceScanner('window.__mapReady===true && !!window.scanWizard'), 'wine B scanner ready');
+  await practiceScanner("loadImage('/practice-cards/B-1.png')");
+  await until(() => practiceScanner("document.documentElement.dataset.scanStep==='summary' && !!window.__lastRun"), 'wine B card read');
+  await practiceScanner("window.__lastRun.groups.forEach(g=>{if(g.name.toLowerCase()==='you are'){g.value=null;g.flag='not marked';}});render(window.__lastRun)");
+  await practiceScanner("document.getElementById('confirmBtn').click()");
+  await until(() => practiceScanner("document.documentElement.dataset.scanStep==='saved' && savedCount===1"), 'partial collection saved');
+  assert.equal(await practiceScanner("[...document.querySelectorAll('#wizardSavedActions button')].some(b=>b.textContent==='Done'&&!b.hidden)"), true);
+  await host.waitText('1/2 cards');
+  await host.submit('.round-footer form', {}, 'Team answers →');
+  await host.waitText('What did each team pick?');
+  assert.equal((await db.query('SELECT "activePosition","runStep" FROM "Event" WHERE id=$1', [practice.id])).rows[0].runStep, 'ANSWERS');
+  note('Zero-card and partial-card collections can continue; the phone offers Done before the expected total');
   await db.query('DELETE FROM "Event" WHERE id=$1', [practice.id]);
   note('Create a separate scanner practice tasting with matching two-wine sample-card settings');
   await host.navigate(base);

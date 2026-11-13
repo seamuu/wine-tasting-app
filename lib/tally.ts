@@ -8,6 +8,8 @@
 
 import { categoriesFor, type Category } from "./flavours";
 import { scoreWine, type Answer, type Key, type Score } from "./scoring";
+import { isUnnamedTaster, tasterLabel } from "./taster";
+export { tasterLabel } from "./taster";
 
 export type Sub = Answer & {
   id: string;
@@ -25,9 +27,6 @@ export type WineRow = Key & {
   teaser: string | null;
   submissions: Sub[];
 };
-
-export const tasterLabel = (t: { idA: string; idB: string; name: string | null }) =>
-  t.name?.trim() || `${t.idA} ${t.idB}`;
 
 export const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -130,6 +129,7 @@ export function leaderboard(wines: WineRow[]): Standing[] {
   for (const wine of scored) {
     const scores = scoreWine(wine.submissions, wine);
     for (const sub of wine.submissions) {
+      if (isUnnamedTaster(sub.taster)) continue;
       const score = scores.get(sub);
       if (!score || score.total == null) continue;
       let row = byTaster.get(sub.tasterId);
@@ -184,6 +184,7 @@ export function superlatives(wines: WineRow[]): Superlative[] {
     const scores = scoreWine(wine.submissions, wine);
     const roomRating = mean(wine.submissions.map((s) => s.rating).filter((n): n is number => n != null));
     for (const sub of wine.submissions) {
+      if (isUnnamedTaster(sub.taster)) continue;
       const a = get(sub);
       const sc = scores.get(sub);
       if (sc?.flavour != null) a.flavour.push(sc.flavour);

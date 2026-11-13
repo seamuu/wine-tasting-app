@@ -71,4 +71,28 @@ assert.equal(payload.winePosition, "A");
 assert.equal(payload.rating, 8);
 assert.deepEqual(payload.flavours, ["Citrus fruit|Lemon"]);
 assert.equal(payload.priceBucket, null);
+const unnamedScan = { ...scan, scanId: "optional-name-scan-001", groups: scan.groups.map(g =>
+  g.name === "You are" ? { ...g, value: null, flag: "not marked" } : g) };
+const unnamedPayload = toPayload("event", unnamedScan, [], [{ position: "A", side: "WHITE", count: 0, name: "Hidden" }]);
+assert.equal(unnamedPayload.idA, null);
+assert.equal(unnamedPayload.idB, null);
+assert.equal(unnamedPayload.needsReview, false, "Optional name bubbles must not flag an otherwise valid card");
+assert.equal(unnamedPayload.scanId, "optional-name-scan-001");
+assert.equal(unnamedPayload.rating, 8);
+const partialName = toPayload("event", { ...scan, groups: scan.groups.filter(g => g.value !== "Mommy") }, [], [{ position: "A", side: "WHITE", count: 0, name: "Hidden" }]);
+assert.equal(partialName.idA, null);
+assert.equal(partialName.idB, null, "An incomplete pair must save independently, not join a named taster");
+const { UNNAMED_TASTER, tasterLabel } = await loadTs("../lib/taster.ts");
+const { leaderboard, ratingHistogram, wheelData } = await loadTs("../lib/tally.ts");
+const card = { priceBucket: null, body: 3, acidity: 4, tannin: null, sweetness: 1, alcohol: 3,
+  rating: 8, flavours: ["Citrus fruit|Lemon"], status: "CONFIRMED" };
+const named = { ...card, id: "named", tasterId: "named", taster: { id: "named", idA: "Red", idB: "Fox", name: null } };
+const anonymous = { ...card, id: "unnamed", tasterId: "unnamed", taster: { id: "unnamed", idA: UNNAMED_TASTER, idB: "internal-key", name: null } };
+const both = [named, anonymous];
+const scored = { ...wines[0], side: "WHITE", keyBody: 3, keyAcidity: 4, keySweetness: 1, keyAlcohol: 3,
+  keyTannin: null, keyFlavours: ["Citrus fruit|Lemon"], priceBucket: null, submissions: both };
+assert.equal(tasterLabel(anonymous.taster), "Unnamed card");
+assert.equal(ratingHistogram(both)[7], 2, "Both named and unnamed cards contribute to wine ratings");
+assert.ok(wheelData(both, "WHITE").some(slice => slice.counts.includes(2)), "Unnamed aromas stay in the room’s results");
+assert.equal(leaderboard([scored]).length, 1, "Unnamed cards must not invent person-level rankings");
 console.log("Guided quiz checks passed: full flight progression, cumulative scoring, ties, missing answers, categories and scanner payload.");

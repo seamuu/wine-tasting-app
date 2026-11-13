@@ -131,7 +131,7 @@ export default function SetupTab({ event, step = "tasting" }: { event: EventRow;
             </label>
             <div><SubmitButton>Save card settings</SubmitButton></div>
           </form>
-          <p className="small">Give everyone a different two-part name. They mark those same two bubbles on every card.</p>
+          <p className="small">Names are optional. A different colour-and-animal pair for each person lets us link their cards across wines.</p>
         </details>
       </div>
 

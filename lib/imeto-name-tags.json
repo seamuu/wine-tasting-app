@@ -1,0 +1,10 @@
+[
+  { "name": "Simen", "colour": "Red", "animal": "Fox" },
+  { "name": "Marthe", "colour": "Blue", "animal": "Owl" },
+  { "name": "Tom Daniel", "colour": "Yellow", "animal": "Bear" },
+  { "name": "Anja", "colour": "Green", "animal": "Wolf" },
+  { "name": "Henrik", "colour": "Orange", "animal": "Fox" },
+  { "name": "Snorre", "colour": "Red", "animal": "Owl" },
+  { "name": "Séamus", "colour": "Blue", "animal": "Bear" },
+  { "name": "Stefano", "colour": "Yellow", "animal": "Wolf" }
+]

@@ -11,6 +11,8 @@ import { CATEGORIES, optionOrder, playable, type QuizWine } from "@/lib/quiz";
 import { isRoundStep, nextRound } from "@/lib/rounds";
 import { mapMode, mapEnabled, mapRoundReady, parseCell, pointCell } from "@/lib/map";
 import type { QuizCategory } from "@/app/generated/prisma/enums";
+import { randomUUID } from "node:crypto";
+import { UNNAMED_TASTER, tasterLabel } from "@/lib/taster";
 
 const str = (v: FormDataEntryValue | null) => {
   const s = typeof v === "string" ? v.trim() : "";
@@ -259,8 +261,10 @@ export async function setStage(form: FormData) {
 export type ScanPayload = {
   eventId: string;
   winePosition: Position;
-  idA: string;
-  idB: string;
+  idA: string | null;
+  idB: string | null;
+  scanId?: string;
+  submissionId?: string;
   side: "WHITE" | "RED";
   priceBucket: number | null;
   body: number | null;
@@ -276,20 +280,18 @@ export type ScanPayload = {
 };
 
 /**
- * Save one scanned card. The taster is created on first sight — nobody is
- * registered up front, they just mark two bubbles and appear.
+ * Named cards replace that person's card for the wine. Each unnamed reading
+ * gets its own identity, with a stable scan key for safe retries.
  */
 export async function saveScan(payload: ScanPayload) {
+  return persistCard(payload, payload.needsReview ? "NEEDS_REVIEW" : "CONFIRMED");
+}
+
+async function persistCard(payload: ScanPayload, status: "CONFIRMED" | "NEEDS_REVIEW" | "MANUAL") {
   const wine = await prisma.wine.findUnique({
     where: { eventId_position: { eventId: payload.eventId, position: payload.winePosition } },
   });
   if (!wine) return { ok: false as const, error: `No wine ${payload.winePosition} in this tasting yet.` };
-
-  const taster = await prisma.taster.upsert({
-    where: { eventId_idA_idB: { eventId: payload.eventId, idA: payload.idA, idB: payload.idB } },
-    create: { eventId: payload.eventId, idA: payload.idA, idB: payload.idB },
-    update: {},
-  });
 
   const values = {
     side: payload.side,
@@ -301,27 +303,47 @@ export async function saveScan(payload: ScanPayload) {
     alcohol: payload.alcohol,
     rating: payload.rating,
     flavours: payload.flavours,
-    status: payload.needsReview ? ("NEEDS_REVIEW" as const) : ("CONFIRMED" as const),
+    status,
     reviewNote: payload.reviewNote ?? null,
     readings: (payload.readings ?? undefined) as never,
   };
 
-  await prisma.submission.upsert({
-    where: { wineId_tasterId: { wineId: wine.id, tasterId: taster.id } },
-    create: { eventId: payload.eventId, wineId: wine.id, tasterId: taster.id, ...values },
-    update: values,
+  const { taster, submission } = await prisma.$transaction(async tx => {
+    const previous = payload.submissionId ? await tx.submission.findFirst({
+      where: { id: payload.submissionId, eventId: payload.eventId, wineId: wine.id }, include: { taster: true },
+    }) : null;
+    const named = payload.idA?.trim() && payload.idB?.trim();
+    const scanId = typeof payload.scanId === "string" && /^[\w-]{16,80}$/.test(payload.scanId) ? payload.scanId : randomUUID();
+    const identity = named ? { idA: payload.idA!.trim(), idB: payload.idB!.trim() }
+      : previous ? { idA: previous.taster.idA, idB: previous.taster.idB }
+        : { idA: UNNAMED_TASTER, idB: `${wine.id}:${scanId}` };
+    const taster = await tx.taster.upsert({
+      where: { eventId_idA_idB: { eventId: payload.eventId, ...identity } },
+      create: { eventId: payload.eventId, ...identity }, update: {},
+    });
+    const submission = await tx.submission.upsert({
+      where: { wineId_tasterId: { wineId: wine.id, tasterId: taster.id } },
+      create: { eventId: payload.eventId, wineId: wine.id, tasterId: taster.id, ...values }, update: values,
+    });
+    if (previous && previous.id !== submission.id) {
+      await tx.submission.delete({ where: { id: previous.id } });
+      if (previous.tasterId !== taster.id && !await tx.submission.count({ where: { tasterId: previous.tasterId } })) {
+        await tx.taster.delete({ where: { id: previous.tasterId } });
+      }
+    }
+    return { taster, submission };
   });
 
   revalidatePath(`/t/${payload.eventId}`, "layout");
-  return { ok: true as const, taster: `${taster.idA} ${taster.idB}`, wine: `Wine ${wine.position}` };
+  return { ok: true as const, taster: tasterLabel(taster), wine: `Wine ${wine.position}`, submissionId: submission.id };
 }
 
 /**
  * The paper card, typed in. Used when a photo will not read — a crease, a
  * shadow, a biro that skipped — and the alternative is losing the card.
  *
- * It goes through the same upsert as a scan, so entering one by hand and then
- * getting the photo to work later simply replaces it, in either order.
+ * Named entries use the same identity as a scan. Unnamed entries are independent;
+ * correcting a saved card keeps its original identity and replaces that card.
  */
 export async function saveManualCard(form: FormData) {
   const eventId = String(form.get("eventId"));
@@ -332,20 +354,15 @@ export async function saveManualCard(form: FormData) {
 
   const returnTo = str(form.get("returnTo")) === "run"
     ? `/t/${eventId}/run?wine=${position}&step=COLLECT` : `/t/${eventId}?tab=scan`;
-  if (!idA || !idB) redirect(`${returnTo}&manual=who`);
 
   const wine = await prisma.wine.findUnique({
     where: { eventId_position: { eventId, position } },
   });
   if (!wine) redirect(`${returnTo}&manual=nowine`);
 
-  const taster = await prisma.taster.upsert({
-    where: { eventId_idA_idB: { eventId, idA, idB } },
-    create: { eventId, idA, idB },
-    update: {},
-  });
-
-  const values = {
+  const saved = await persistCard({
+    eventId, winePosition: position, idA: idA ?? null, idB: idB ?? null,
+    submissionId: str(form.get("submissionId")), needsReview: false,
     side: wine.side,
     priceBucket: int(form.get("priceBucket")) ?? null,
     body: int(form.get("body")) ?? null,
@@ -355,17 +372,8 @@ export async function saveManualCard(form: FormData) {
     alcohol: int(form.get("alcohol")) ?? null,
     rating: int(form.get("rating")) ?? null,
     flavours: form.getAll("flavours").map(String),
-    status: "MANUAL" as const,
-    reviewNote: null,
-  };
-
-  await prisma.submission.upsert({
-    where: { wineId_tasterId: { wineId: wine.id, tasterId: taster.id } },
-    create: { eventId, wineId: wine.id, tasterId: taster.id, ...values },
-    update: values,
-  });
-
-  revalidatePath(`/t/${eventId}`, "layout");
+  }, "MANUAL");
+  if (!saved.ok) redirect(`${returnTo}&manual=nowine`);
   redirect(`${returnTo}&manual=saved`);
 }
 

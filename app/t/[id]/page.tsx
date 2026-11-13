@@ -16,7 +16,7 @@ const TABS = [
 
 const MANUAL_MESSAGE: Record<string, string> = {
   saved: "Card filed by hand.",
-  who: "That card needs both name bubbles before it can be filed.",
+  who: "Names are optional. Leave the name bubbles blank to save an unnamed card.",
   nowine: "There is no wine on that letter yet.",
 };
 

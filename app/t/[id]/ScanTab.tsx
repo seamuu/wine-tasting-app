@@ -52,7 +52,7 @@ export default function ScanTab({ eventId, wines, idSet, idSetKey, wineCount, pr
       <div className={`scanner-progress ${complete ? "is-complete" : ""}`} role="status" aria-live="polite">
         {complete ? "✓ All cards collected" : `${count}/${expected ?? "?"} cards saved`}
       </div>
-      <p className="small">Read → review → confirm → next card.</p>
+      <p className="small">Names are optional. Confirm each scan, then continue when you’re ready.</p>
       <div className="card scanner-frame">
         <iframe ref={iframeRef}
           src={`/scan-v2.html?embedded=1&event=${eventId}&ids=${encodeURIComponent(idSetKey)}`
