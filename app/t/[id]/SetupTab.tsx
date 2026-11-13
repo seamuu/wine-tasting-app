@@ -1,243 +1,176 @@
-import { updateEvent } from "../../actions";
+import Link from "next/link";
+import { updateEvent, saveTeam, deleteTeam, resetResults } from "../../actions";
+import SubmitButton from "../../SubmitButton";
 import { ID_SETS, POSITIONS, printMath } from "@/lib/card";
-
-type Wine = {
-  id: string; position: string; name: string; side: string;
-  priceBucket: number | null; keyFlavours: string[];
-  keyBody: number | null; keyAcidity: number | null; keyTannin: number | null;
-  keySweetness: number | null; keyAlcohol: number | null;
-};
+import { MAPS, mapMode, mapEnabled, mapRoundReady, pointCell, outsideEurope } from "@/lib/map";
+import { CATEGORIES, CATEGORY_META, playable, whyNotPlayable, type QuizWine } from "@/lib/quiz";
+import { PRINT_PACKS } from "@/lib/print-packs";
+import PrintDownloads from "./PrintDownloads";
 
 type EventRow = {
-  id: string; name: string; idSet: string; revealMode: string;
-  wineCount: number; guestCount: number | null; priceOnCard: boolean; wines: Wine[];
+  id: string; name: string; idSet: string; wineCount: number;
+  guestCount: number | null; priceOnCard: boolean; mapMode: string;
+  wines: (QuizWine & { stage: string; side: string; submissions: unknown[] })[];
+  teams: { id: string; name: string; memberCount: number; guesses?: unknown[]; mapGuesses?: unknown[] }[];
 };
 
-function Check({ done, children, warn }: { done: boolean; children: React.ReactNode; warn?: boolean }) {
-  const colour = done ? "var(--olive)" : warn ? "var(--warn)" : "var(--ink-soft)";
-  return (
-    <li style={{ display: "flex", gap: ".6rem", alignItems: "baseline", color: colour, marginBottom: ".4rem" }}>
-      <span aria-hidden style={{ fontWeight: 700 }}>{done ? "✓" : warn ? "!" : "○"}</span>
-      <span className="small" style={{ color: "inherit" }}>{children}</span>
-    </li>
-  );
-}
-
-/**
- * Everything that has to be decided before paper comes out of the printer, in
- * the order it has to be decided, with the arithmetic done for you.
- *
- * The vocabulary and the number of wines are printed onto the card, so they are
- * grouped together and flagged as such — changing either after printing means
- * printing again, and that is the one mistake this screen exists to prevent.
- */
-export default function SetupTab({ event }: { event: EventRow }) {
+export default function SetupTab({ event, step = "tasting" }: { event: EventRow; step?: string }) {
+  const mode = mapMode(event.mapMode);
+  const mapReady = mapRoundReady(event.wines, mode);
+  const mapLocked = event.wines.some((wine) => wine.stage === "LOCKED" || wine.stage === "REVEALED") || event.teams.some((team) => team.guesses?.length || team.mapGuesses?.length);
+  const mapTargets = mapEnabled(mode) ? event.wines.filter((wine) => pointCell(wine, mode)).length : 0;
+  const outside = mode === "EUROPE" ? event.wines.filter((wine) => outsideEurope(wine.country)) : [];
   const idSet = ID_SETS[event.idSet] ?? ID_SETS.house;
   const capacity = idSet.a.length * idSet.b.length;
-  const guests = event.guestCount ?? 0;
-  const { cards, sheets } = printMath(guests || 0, event.wineCount);
-
-  const keyed = event.wines.filter((w) =>
-    w.priceBucket != null || w.keyFlavours.length > 0 ||
-    w.keyBody != null || w.keyAcidity != null || w.keyTannin != null ||
-    w.keySweetness != null || w.keyAlcohol != null).length;
-
-  const allWinesIn = event.wines.length >= event.wineCount;
-  const overCapacity = guests > capacity;
-  const printUrl = `/card-v2.html?ids=${event.idSet}&wines=${event.wineCount}`
-    + `&price=${event.priceOnCard ? 1 : 0}`;
+  const guests = event.teams.reduce((n, team) => n + team.memberCount, 0);
+  const { cards, sheets } = printMath(guests, event.wineCount);
+  const printUrl = `/card-v2.html?ids=${event.idSet}&wines=${event.wineCount}&price=${event.priceOnCard ? 1 : 0}`;
+  const ready = guests > 0 && guests <= capacity && event.wines.length === event.wineCount && (!mapEnabled(mode) || mapReady);
+  const rounds = CATEGORIES.filter((category) => playable(event.wines, category));
+  const started = event.wines.some((wine) => wine.stage !== "UPCOMING" || wine.submissions.length > 0);
 
   return (
-    <div className="split">
-      <section className="stack" style={{ gap: "2rem" }}>
-        <div>
-          <div className="section-title">The night</div>
+    <div className="setup-flow">
+      <div className="stack" style={{ gap: "1rem" }}>
+        <details className="card setup-step" name="tasting-setup" open={step === "tasting"} id="setup-tasting">
+          <summary>1 · The tasting</summary>
           <form action={updateEvent} className="stack" style={{ gap: "1rem" }}>
             <input type="hidden" name="eventId" value={event.id} />
-
+            <input type="hidden" name="nextSetupStep" value="teams" />
             <label className="field">
-              <span className="label">Name</span>
-              <input type="text" name="name" defaultValue={event.name} />
+              <span className="label">Tasting name</span>
+              <input name="name" type="text" defaultValue={event.name} required />
             </label>
-
-            <div className="row" style={{ gap: ".8rem", alignItems: "flex-start" }}>
-              <label className="field" style={{ flex: 1, minWidth: "150px" }}>
-                <span className="label">How many people</span>
-                <input type="number" name="guestCount" min={1} max={capacity}
-                       defaultValue={event.guestCount ?? ""} placeholder="e.g. 9" />
-                <span className="small">Used to work out the print run and to tell you when every card is in.</span>
-              </label>
-
-              <label className="field" style={{ flex: 1, minWidth: "150px" }}>
-                <span className="label">When is the wine revealed</span>
-                <select name="revealMode" defaultValue={event.revealMode}>
-                  <option value="BLIND">Blind — hidden until you reveal it</option>
-                  <option value="OPEN">Open — shown from the start</option>
-                </select>
-                <span className="small">
-                  {event.revealMode === "BLIND"
-                    ? "The present screen shows only the letter, so the laptop is safe to leave facing the room."
-                    : "Every screen shows the bottle. A guided tasting rather than a guessing game."}
-                </span>
-              </label>
-            </div>
-
-            <button className="btn btn-primary" type="submit" style={{ alignSelf: "flex-start" }}>Save</button>
+            <label className="field">
+              <span className="label">How many wines?</span>
+              <select name="wineCount" defaultValue={event.wineCount} disabled={started}>
+                {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} wines · A–{POSITIONS[n - 1]}</option>)}
+              </select>
+            </label>
+            <label className="field"><span className="label">The map round</span>
+              <select name="mapMode" defaultValue={mode} disabled={mapLocked}>
+                <option value="EUROPE">Europe · easier to place the region</option>
+                <option value="WORLD">World · wines from any country</option>
+                <option value="OFF">No map round</option>
+              </select>
+              <span className="small">Optional: teams locate each wine’s region on a map.</span>
+            </label>
+            {outside.length > 0 && <p className="note">Wine {outside.map((wine) => wine.position).join(", ")} {outside.length === 1 ? "is" : "are"} from outside Europe. Choose European wines or switch to World. The wines you added are still saved.</p>}
+            {started && <p className="small">The wines and card layout cannot be changed after card collection starts.</p>}
+            <div><SubmitButton>Save &amp; continue →</SubmitButton></div>
           </form>
-        </div>
+        </details>
 
-        <div>
-          <div className="section-title">Printed onto the card</div>
-          <p className="lede" style={{ marginBottom: "1rem" }}>
-            These two end up on paper. Change them after printing and the pack is wrong — the
-            letters won&rsquo;t match the flight, or the names won&rsquo;t match the room.
-          </p>
-          <form action={updateEvent} className="stack" style={{ gap: "1rem" }}>
+        <details className="card setup-step" name="tasting-setup" open={step === "teams"} id="setup-teams">
+          <summary>2 · Your teams</summary>
+          <p className="lede">Team sizes tell us how many cards to collect for each wine.</p>
+          <div className="stack" style={{ gap: "1rem", marginTop: "1rem" }}>
+            {event.teams.map((team) => (
+              <details className="team-setup" key={team.id}><summary>{team.name} · {team.memberCount} {team.memberCount === 1 ? "person" : "people"}</summary>
+                <form action={saveTeam} className="team-form">
+                  <input type="hidden" name="eventId" value={event.id} />
+                  <input type="hidden" name="teamId" value={team.id} />
+                  <label className="field"><span className="label">Team name</span>
+                    <input type="text" name="name" defaultValue={team.name} required maxLength={60} />
+                  </label>
+                  <label className="field"><span className="label">People</span>
+                    <input type="number" name="memberCount" defaultValue={team.memberCount} required min={1} max={100} />
+                  </label>
+                  <SubmitButton className="btn btn-sm">Save</SubmitButton>
+                </form>
+                <details className="small"><summary>Remove team</summary>
+                  <p>This also removes this team’s quiz answers.</p>
+                  <form action={deleteTeam}><input type="hidden" name="teamId" value={team.id} />
+                    <SubmitButton className="btn btn-sm btn-quiet" pending="Removing…">Remove {team.name}</SubmitButton>
+                  </form>
+                </details>
+              </details>
+            ))}
+            <form key={event.teams.length} action={saveTeam} className="team-form">
+              <input type="hidden" name="eventId" value={event.id} />
+              <label className="field"><span className="label">New team</span>
+                <input type="text" name="name" placeholder={`Team ${event.teams.length + 1}`} required maxLength={60} />
+              </label>
+              <label className="field"><span className="label">People</span>
+                <input type="number" name="memberCount" placeholder="5" required min={1} max={100} />
+              </label>
+              <SubmitButton className="btn btn-primary btn-sm">Add team</SubmitButton>
+            </form>
+          </div>
+          <p className="small"><b>{event.teams.length} teams · {guests} people</b></p>
+          {event.guestCount != null && guests !== event.guestCount && <p className="note">This tasting previously had {event.guestCount} guests. Check and save each team’s size so the card count matches your room.</p>}
+          {guests > capacity && <p className="note">This card has {capacity} unique names for {guests} people. Choose a larger name set below before printing.</p>}
+          <Link className="btn" href={`/t/${event.id}?tab=wines`}>Next: set up wines →</Link>
+        </details>
+
+        <details className="card" id="reset-results">
+          <summary>Clear results and start again</summary>
+          <p className="small">Deletes all tasting cards and team answers, including map guesses, for this tasting. Resets all wines to unrevealed and returns to wine A. Wines, teams, names and settings are kept.</p>
+          <form action={resetResults} className="stack" style={{ gap: "1rem", marginTop: "1rem" }}>
             <input type="hidden" name="eventId" value={event.id} />
-
-            <label className="field">
-              <span className="label">How many wines</span>
-              <select name="wineCount" defaultValue={event.wineCount}>
-                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                  <option key={n} value={n}>{n} — letters A to {POSITIONS[n - 1]}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span className="label">The price round</span>
-              <select name="priceOnCard" defaultValue={event.priceOnCard ? "1" : "0"}>
-                <option value="1">On everyone&rsquo;s card — each person guesses</option>
-                <option value="0">On the team sheet — guessed together</option>
-              </select>
-              <span className="small">
-                Off the card, the freed space goes into bigger aroma bubbles, which photograph
-                better. The scanner is told which layout to expect.
-              </span>
-            </label>
-
-            <label className="field">
-              <span className="label">What people are called</span>
-              <select name="idSet" defaultValue={event.idSet}>
-                {Object.entries(ID_SETS).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label} — {v.a.length * v.b.length} people</option>
-                ))}
-              </select>
-            </label>
-
-            <div>
-              <span className="label">The {capacity} names on this card</span>
-              <div className="row" style={{ gap: ".3rem", marginTop: ".45rem" }}>
-                {idSet.a.map((a) => idSet.b.map((b) => (
-                  <span key={`${a}-${b}`} className="pill" style={{ fontSize: ".7rem" }}>{a} {b}</span>
-                )))}
-              </div>
-            </div>
-
-            <button className="btn btn-primary" type="submit" style={{ alignSelf: "flex-start" }}>Save</button>
+            <label className="row"><input type="checkbox" name="confirmReset" value="yes" required />I understand that these results cannot be recovered.</label>
+            <div><SubmitButton className="btn btn-quiet" pending="Clearing results…">Clear results</SubmitButton></div>
           </form>
-        </div>
-      </section>
+        </details>
 
-      <section className="stack" style={{ gap: "1.5rem" }}>
-        <div className="card">
-          <div className="section-title">Print the pack</div>
+        <details className="card">
+          <summary>Card settings</summary>
+          <p className="small">Set these before printing. Changing the names, wine count or price layout means printing a new pack.</p>
+          <form action={updateEvent} className="stack" style={{ gap: "1rem", marginTop: "1rem" }}>
+            <input type="hidden" name="eventId" value={event.id} />
+            <label className="field"><span className="label">Names on the cards</span>
+              <select name="idSet" defaultValue={event.idSet} disabled={started}>
+                {Object.entries(ID_SETS).map(([key, value]) => <option key={key} value={key}>{value.label} · {value.a.length * value.b.length} people</option>)}
+              </select>
+            </label>
+            <label className="field"><span className="label">Individual price guess</span>
+              <select name="priceOnCard" defaultValue={event.priceOnCard ? "1" : "0"} disabled={started}>
+                <option value="0">Team quiz only (recommended)</option>
+                <option value="1">Also on individual cards</option>
+              </select>
+            </label>
+            <div><SubmitButton>Save card settings</SubmitButton></div>
+          </form>
+          <p className="small">Give everyone a different two-part name. They mark those same two bubbles on every card.</p>
+        </details>
+      </div>
 
-          {guests === 0 ? (
-            <p className="small">Say how many people are coming and this works out the print run.</p>
-          ) : (
-            <>
-              <p className="serif" style={{ fontSize: "2.1rem", margin: ".1rem 0", lineHeight: 1.1 }}>
-                {sheets} <span style={{ fontSize: "1rem" }}>A4 sheets</span>
-              </p>
-              <p className="small">
-                {guests} {guests === 1 ? "person" : "people"} × {event.wineCount}{" "}
-                {event.wineCount === 1 ? "wine" : "wines"} = {cards} cards, two to a sheet.
-              </p>
-              <p className="small" style={{ marginTop: ".5rem" }}>
-                <b style={{ color: "var(--ink)" }}>Double-sided</b>, flipped on the short edge —
-                white on the front, red on the back. Everyone takes one card per wine and uses
-                whichever side matches what&rsquo;s in the glass.
-              </p>
-            </>
-          )}
+      <div className="stack" style={{ gap: "1rem" }}>
+        <details className="card setup-step" name="tasting-setup" id="setup-wines">
+          <summary>3 · Wines · {event.wines.length}/{event.wineCount} added</summary>
+          <Link className="btn btn-primary" href={`/t/${event.id}?tab=wines`}>Set up wines →</Link>
+        </details>
+        <details className="card setup-step" name="tasting-setup" open={step === "print"} id="setup-print">
+          <summary>4 · Print</summary>
+          {PRINT_PACKS[event.id] ? <PrintDownloads eventId={event.id} /> : <>
 
-          {overCapacity && (
-            <p className="note" style={{ marginTop: ".9rem" }}>
-              {guests} people but only {capacity} names in <b>{idSet.label}</b>. Two people would
-              share a name and their cards would merge. Pick a bigger set or trim the guest list.
-            </p>
-          )}
-
-          <div className="row" style={{ marginTop: "1rem" }}>
-            <a className="btn btn-primary" href={printUrl} target="_blank" rel="noreferrer">
-              Open the card ↗
-            </a>
-            <a className="btn" href={`${printUrl}&print=a4`} target="_blank" rel="noreferrer">
-              Straight to A4 ↗
-            </a>
+          {guests ? <>
+            <p className="serif stat-number">{cards} <span>tasting cards</span></p>
+            <p className="small">{guests} people × {event.wineCount} wines = {sheets} A4 sheets, double-sided, two cards to a sheet.</p>
+          </> : <p className="small">Add teams to see how many cards to print.</p>}
+          <div className="stack" style={{ gap: ".6rem", marginTop: "1rem" }}>
+            <a className="btn" href={`${printUrl}&print=a4`} target="_blank" rel="noreferrer">Print tasting cards ↗</a>
+            <a className="btn" href={`/names.html?ids=${event.idSet}`} target="_blank" rel="noreferrer">Print name tags ↗</a>
+            <a className="btn" href={`/sample-cards.html?ids=${event.idSet}&wines=${event.wineCount}&price=${event.priceOnCard ? 1 : 0}&sides=${POSITIONS.slice(0, event.wineCount).map((position) => event.wines.find((wine) => wine.position === position)?.side === "RED" ? "R" : "W").join("")}`} target="_blank" rel="noreferrer">Filled-in cards for a scan test ↗</a>
+            <a className="btn" href={`/t/${event.id}/quiz`} target="_blank" rel="noreferrer">Print team quiz{mapEnabled(mode) ? " + maps" : " sheets"} ↗</a>
+            {mapEnabled(mode) && <a className="btn" href={`/t/${event.id}/quiz?maps=only`} target="_blank" rel="noreferrer">Preview the gridded map ↗</a>}
           </div>
-          <p className="small" style={{ marginTop: ".7rem" }}>
-            Print <b style={{ color: "var(--ink)" }}>one sheet first</b>, fill it in, and scan it
-            before running off the rest.
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="section-title">Name cards</div>
-          <p className="small" style={{ marginBottom: ".8rem" }}>
-            {capacity} little cards, one per pair, {Math.ceil(capacity / 10)} sheets of A4. Cut
-            them up and let people take one at the door — that&rsquo;s who they are for the night.
-            There&rsquo;s also a pick-your-own version where the two halves are separate decks.
-          </p>
-          <a className="btn" href={`/names.html?ids=${event.idSet}`} target="_blank" rel="noreferrer">
-            Open the name cards ↗
-          </a>
-        </div>
-
-        <div className="card">
-          <div className="section-title">Map round</div>
-          <p className="small" style={{ marginBottom: ".8rem" }}>
-            One A4 map of Italy with shaded relief and the wine regions marked. Give everyone a
-            small square of tracing paper: they slide it over their guess, mark one dot, and it
-            gets photographed in place. Print one map, or one each so nobody has to queue.
-          </p>
-          <div className="row">
-            <a className="btn" href="/map.html" target="_blank" rel="noreferrer">
-              Open the map ↗
-            </a>
-            <a className="btn btn-quiet" href="/map.html?regions=0" target="_blank" rel="noreferrer">
-              Unlabelled version ↗
-            </a>
-          </div>
-          <p className="small" style={{ marginTop: ".7rem" }}>
-            Reading the dots isn&rsquo;t wired up yet — the sheet carries the same corner marks as
-            the tasting card, so it&rsquo;s ready for it, but for now the map round is scored by eye.
-          </p>
-        </div>
-
-        <div className="card">
-          <div className="section-title">Ready?</div>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            <Check done={guests > 0 && !overCapacity} warn={overCapacity}>
-              {guests > 0 ? `${guests} people` : "Guest count not set"}
-            </Check>
-            <Check done={allWinesIn} warn={event.wines.length > event.wineCount}>
-              {event.wines.length} of {event.wineCount} wines added
-              {event.wines.length > event.wineCount && " — more wines than letters on the card"}
-            </Check>
-            <Check done={keyed === event.wines.length && event.wines.length > 0}>
-              {keyed} of {event.wines.length} have an answer key
-              {keyed < event.wines.length && " — the rest get scored against the room"}
-            </Check>
-            <Check done={false}>Test card printed and scanned</Check>
+          <p className="small">Print one test sheet first and scan it. Use pens and flip double-sided cards on the short edge.</p>
+          <details className="setup-checklist"><summary>Check the setup</summary>
+          <ul className="readiness-list">
+            <li>{event.teams.length ? "✓" : "○"} Teams and sizes set</li>
+            <li>{event.wines.length === event.wineCount ? "✓" : "○"} {event.wines.length} of {event.wineCount} wines added</li>
+            <li>{rounds.length ? "✓" : "○"} {rounds.length} quiz categories ready</li>
+            {mapEnabled(mode) && <li>{mapReady ? "✓" : "○"} {MAPS[mode].title} map: {mapTargets} of {event.wineCount} region locations set in Wines</li>}
           </ul>
-          <p className="small" style={{ marginTop: ".8rem" }}>
-            Nothing here blocks you. A wine with no key still scores — everyone is measured
-            against what the room agreed on instead.
-          </p>
-        </div>
-      </section>
+          {CATEGORIES.filter((c) => !rounds.includes(c)).map((c) => (
+            <p key={c} className="small">{CATEGORY_META[c].title}: {whyNotPlayable(event.wines, c)}.</p>
+          ))}
+          </details>
+          <Link className="btn btn-primary" href={`/t/${event.id}/run`}>{ready ? "Start the quiz →" : "Check what’s missing →"}</Link>
+          </>}
+        </details>
+      </div>
     </div>
   );
 }

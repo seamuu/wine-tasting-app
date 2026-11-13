@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { createEvent } from "./actions";
-import { ID_SETS } from "@/lib/card";
+import { createEvent, createPracticeTasting } from "./actions";
+import SubmitButton from "./SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -15,23 +15,23 @@ export default async function Home() {
     <main className="page">
       <div className="masthead">
         <div>
-          <div className="eyebrow">Paper in, opinions out</div>
+          <div className="eyebrow">Blind wine tasting</div>
           <h1>Wine Flight</h1>
         </div>
+        <a className="btn btn-primary" href="#create-tasting">New tasting →</a>
       </div>
 
-      <div className="split">
+      <div className="home-flow">
         <section>
           <div className="section-title">Your tastings</div>
           {events.length === 0 ? (
-            <p className="empty">Nothing yet. Start one on the right.</p>
+            <p className="empty">Create your first tasting below.</p>
           ) : (
             <div className="grid-wines">
               {events.map((e) => (
                 <Link key={e.id} href={`/t/${e.id}`} className="card" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
                   <div className="spread">
                     <h3>{e.name}</h3>
-                    <span className="pill">{e.revealMode === "BLIND" ? "Blind" : "Open"}</span>
                   </div>
                   <p className="small" style={{ marginTop: ".35rem" }}>
                     {e._count.wines} {e._count.wines === 1 ? "wine" : "wines"} ·{" "}
@@ -44,39 +44,22 @@ export default async function Home() {
           )}
         </section>
 
-        <section className="card">
+        <section className="card" id="create-tasting">
           <div className="section-title">Start a new tasting</div>
           <form action={createEvent} className="stack" style={{ gap: "1rem" }}>
             <label className="field">
-              <span className="label">What are we calling it</span>
+              <span className="label">Tasting name</span>
               <input type="text" name="name" placeholder="Friday night, four reds" required />
             </label>
 
-            <label className="field">
-              <span className="label">How people are named</span>
-              <select name="idSet" defaultValue="house">
-                {Object.entries(ID_SETS).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
-              </select>
-              <span className="small">
-                Two bubbles on the card, so nobody writes their name. Print with the same set you pick here.
-              </span>
-            </label>
+            <p className="lede">Add teams and wines to set up the quiz. Each person fills in a tasting card. Scan the cards, enter the team answers, then reveal the wine.</p>
 
-            <label className="field">
-              <span className="label">When people see the wine</span>
-              <select name="revealMode" defaultValue="BLIND">
-                <option value="BLIND">Blind — reveal after the cards are in</option>
-                <option value="OPEN">Open — show the wine from the start</option>
-              </select>
-              <span className="small">
-                Blind is a guessing game; open is a guided tasting. You can change your mind later.
-              </span>
-            </label>
-
-            <button className="btn btn-primary" type="submit">Create tasting</button>
+            <div><SubmitButton pending="Creating…">Create tasting →</SubmitButton></div>
           </form>
+          <details className="demo-option"><summary>Try a demo first</summary>
+            <p className="small">Two fictional wines, sample team answers and filled-in cards. Each new demo starts fresh.</p>
+            <form action={createPracticeTasting}><SubmitButton pending="Creating demo…">Create demo tasting →</SubmitButton></form>
+          </details>
         </section>
       </div>
     </main>

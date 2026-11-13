@@ -44,9 +44,8 @@ export default function QuizTab({ event }: {
       <section>
         <div className="section-title">The matching round</div>
         <p className="lede" style={{ marginBottom: "1rem" }}>
-          One sheet per team for the whole night. Every answer is used once, so it&rsquo;s a puzzle
-          the table has to solve together. Type the sheets in here when they&rsquo;re handed back —
-          there are only a couple, so they aren&rsquo;t scanned.
+          One sheet per team for the tasting. Use each answer once in each category.
+          Enter the answers here when teams hand in their sheets. Team sheets are not scanned.
         </p>
         <div className="row">
           <a className="btn" href={`/t/${event.id}/quiz?teams=${Math.max(2, event.teams.length)}`}
@@ -59,10 +58,10 @@ export default function QuizTab({ event }: {
       </section>
 
       {wines.length < 2 ? (
-        <p className="empty">Add at least two wines and the matching rounds build themselves.</p>
+        <p className="empty">Add at least two wines to set up the matching rounds.</p>
       ) : live.length === 0 ? (
         <p className="note">
-          No round can run yet. Each one needs every wine to have its own distinct answer — add the
+          No round can run yet. Each category needs a different answer for every wine. Add the
           wines from their Vinmonopolet links so region, grapes and the tasting note come across.
         </p>
       ) : (
@@ -117,10 +116,10 @@ export default function QuizTab({ event }: {
                                   <select name={`g:${c}:${w.id}`} defaultValue={slot >= 0 ? String(slot) : ""}
                                           style={{ minWidth: "9rem",
                                                    borderColor: g ? (right ? "var(--olive)" : "var(--claret)") : undefined }}>
-                                    <option value="">—</option>
+                                    <option value="">Not set</option>
                                     {order.map((o, i) => (
                                       <option key={o.id} value={i}>
-                                        {OPTION_LABELS[i]} — {short(optionFor(o, c) ?? "")}
+                                        {OPTION_LABELS[i]}: {short(optionFor(o, c) ?? "")}
                                       </option>
                                     ))}
                                   </select>
@@ -134,7 +133,7 @@ export default function QuizTab({ event }: {
                   </div>
                   <div className="row" style={{ marginTop: ".9rem" }}>
                     <button className="btn btn-primary btn-sm" type="submit">Save {team.name}</button>
-                    <span className="small">Green means right, claret means wrong — so don&rsquo;t show the room your screen.</span>
+                    <span className="small">Green means correct. Dark red means incorrect. Keep this screen hidden from teams.</span>
                   </div>
                 </form>
               </section>

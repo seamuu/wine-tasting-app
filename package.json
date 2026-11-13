@@ -7,23 +7,32 @@
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
+    "db:migrate": "prisma migrate deploy --config prisma7.config.ts",
+    "db:status": "prisma migrate status --config prisma7.config.ts",
+    "test:polet": "node scripts/test-polet.mjs",
     "check:vocab": "node scripts/check-vocab.mjs",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test:rounds": "node scripts/test-rounds.mjs",
+    "test:guided": "node --env-file=.env scripts/test-guided-quiz.mjs",
+    "test:map": "node scripts/test-map.mjs",
+    "test:map:browser": "node --env-file=.env scripts/test-map-browser.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^20.19 || ^22.12 || >=24.0"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "next": "16.3.4",
     "prisma": "7.10.0",
+    "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

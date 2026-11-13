@@ -32,9 +32,8 @@ enum WineSide {
   RED
 }
 
-// Whether the wine's story is held back until the cards are in, or shown from
-// the start. A blind flight is a guessing game; an open one is a guided
-// tasting. Same data either way - this only gates when the reveal unlocks.
+// Retained for existing databases. The product now always uses BLIND;
+// Wine.stage and the saved run cursor control the explicit reveal.
 enum RevealMode {
   BLIND
   OPEN
@@ -72,6 +71,11 @@ model Event {
   // has to be told which one it is looking at.
   priceOnCard Boolean   @default(true)
 
+  // The host and the room's display resume at the same point after a reload.
+  activePosition FlightPosition @default(A)
+  runStep        String         @default("COLLECT")
+  mapMode        String         @default("OFF") // EUROPE / WORLD / OFF; frozen after collection
+
   wines       Wine[]
   tasters     Taster[]
   submissions Submission[]
@@ -96,6 +100,9 @@ model Wine {
   grapes     String? // "Corvina 40%, Corvinone 20%, ..." as printed on the listing
   sourceUrl  String?
   sourceRef  String? // Vinmonopolet product number
+  // A representative point chosen by the host, independent of the printed grid.
+  mapLatitude  Float?
+  mapLongitude Float?
   teaser     String? // one non-identifying line to show during a blind round
 
   // --- measured facts, straight off the listing ---
@@ -104,6 +111,21 @@ model Wine {
   sugarGl    Decimal? @db.Decimal(5, 2)
   acidGl     Decimal? @db.Decimal(5, 2)
   tastingNote String?
+
+  // --- the rest of what the listing's embedded JSON carries ---
+  colour      String?
+  smell       String?
+  taste       String?
+  storage     String?
+  // Vinmonopolet's sensory ratings, each out of twelve. Kept raw as well as scaled
+  // into the answer key, because "Fylde 12 of 12" is worth showing at a reveal.
+  bodyRaw     Int?
+  acidRaw     Int?
+  tanninRaw   Int?
+  sweetRaw    Int?
+  foodPairing String[] @default([])
+  // Their written explanation of each grape - teaching copy, free.
+  grapeNotes  Json?
 
   // --- the host's answer key ---
   // priceBucket is an index into the card's printed buckets rather than a
@@ -120,6 +142,7 @@ model Wine {
   submissions Submission[]
   guessesAbout TeamGuess[] @relation("GuessAbout")
   guessesChoice TeamGuess[] @relation("GuessChoice")
+  mapGuesses TeamMapGuess[]
 
   @@unique([eventId, position])
 }
@@ -136,7 +159,9 @@ model Team {
   eventId String
   event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   name    String
+  memberCount Int @default(1)
   guesses TeamGuess[]
+  mapGuesses TeamMapGuess[]
 
   @@unique([eventId, name])
 }
@@ -161,6 +186,17 @@ model TeamGuess {
   choice   Wine         @relation("GuessChoice", fields: [choiceId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, wineId, category])
+}
+
+model TeamMapGuess {
+  id     String @id @default(cuid())
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  wineId String
+  wine   Wine   @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  cell   String
+
+  @@unique([teamId, wineId])
 }
 
 // One person at one event. They never write their name on the card; the host

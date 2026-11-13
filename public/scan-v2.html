@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scan · card-v2</title>
 <link href="fonts/card-fonts.css" rel="stylesheet">
+<link rel="stylesheet" href="/scanner-wizard.css">
+<script>const displayOptions=new URLSearchParams(location.search);if(displayOptions.get("diagnostic")!=="1"&&(displayOptions.get("wizard")==="1"||displayOptions.get("embedded")==="1"&&displayOptions.get("event")))document.documentElement.classList.add("wizard-mode");</script>
 <style>
+  html{overflow-anchor:none}
   /* Same paper palette as the app that embeds this. Committed to one light
      look rather than following the device: a wine list is printed on paper. */
   :root{
@@ -42,7 +45,8 @@
            cursor:grab; touch-action:none; }
 
   .cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:1.5rem; align-items:start; }
-  @media (max-width:820px){ .cols{ grid-template-columns:1fr; } }
+  @media (max-width:820px){ .cols{ grid-template-columns:1fr; } #results{grid-row:1} }
+  .review-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}.review-actions button{min-height:44px}.review-actions [hidden]{display:none}.review-help{font-size:.85rem;color:var(--muted);margin:.8rem 0}.btn-primary{background:var(--ok);color:white;border-color:var(--ok)}
   #dstCanvas{ width:100%; height:auto; border:1px solid var(--line); border-radius:4px; background:#fff; }
 
   .key{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center; font-size:.78rem;
@@ -86,19 +90,19 @@
 </head>
 <body>
 <div class="wrap">
-  <div>
+  <div id="legacyHeader">
     <div class="kicker">card-v2 · scanner</div>
     <h1>Read a card</h1>
     <p class="sub">
       Photograph a filled-in card head-on. The four corner squares are found automatically;
       drag the green handles if any of them lands wrong. The bubble map is measured from the
       live card layout, so it can never drift from what was printed.
-      Cards that printed <b>without</b> the black squares still read — tick the box below and
+      Cards that printed <b>without</b> the black squares still read: tick the box below and
       line the handles up on the printed rules instead.
     </p>
   </div>
 
-  <div class="bar">
+  <div class="bar" id="legacyBar">
     <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
     <button class="btn btn-primary" onclick="document.getElementById('file').click()">Choose photo</button>
     <button class="btn" id="readBtn" disabled>Read card</button>
@@ -117,8 +121,8 @@
       Side
       <select id="sideSel" style="font:inherit;font-weight:600;border:0;background:transparent;color:inherit;cursor:pointer;">
         <option value="">read from card</option>
-        <option value="white">white — force</option>
-        <option value="red">red — force</option>
+        <option value="white">white: force</option>
+        <option value="red">red: force</option>
       </select>
     </label>
     <span class="btn" id="buildStamp" style="cursor:default;font-weight:600;">build 18:48</span>
@@ -128,7 +132,7 @@
   <p class="sub" id="aimHint" hidden style="margin:0">
     <b>No-squares mode.</b> Put the two top handles on the <b>far left and far right ends of the long
     line under “Wine Card”</b>, and the two bottom handles on the <b>bottom-left and bottom-right
-    corners of the “Rating” box</b>. Drag slowly — the loupe shows exactly where the point lands.
+    corners of the “Rating” box</b>. Drag slowly: the loupe shows exactly where the point lands.
   </p>
 
   <div class="stage" id="stage">
@@ -138,16 +142,15 @@
     <canvas id="loupe" hidden></canvas>
   </div>
 
-  <p class="filed" id="filed" hidden></p>
 
-  <div class="cols">
+  <div class="cols" id="legacyCols">
     <div>
       <canvas id="dstCanvas"></canvas>
       <p class="key" id="overlayKey" hidden>
         <span><i style="background:#00B050"></i>marked</span>
         <span><i style="background:#E8890C"></i>borderline</span>
         <span><i style="background:#2F86E8"></i>empty</span>
-        <span class="note">Rings show where each bubble is expected — if they sit off the printed circles, drag the corner handles and read again.</span>
+        <span class="note">Rings show where each bubble is expected: if they sit off the printed circles, drag the corner handles and read again.</span>
       </p>
     </div>
     <div id="results"></div>
@@ -217,8 +220,9 @@ function extractSheet(sheetEl){
     });
   });
 
-  groups.push({ kind:"one", name:"Price",
-    items:[...sheetEl.querySelectorAll(".price-item")].map(it =>
+  const priceItems = [...sheetEl.querySelectorAll(".price-item")];
+  if (priceItems.length) groups.push({ kind:"one", name:"Price",
+    items:priceItems.map(it =>
       Object.assign({ label:textOf(it) }, mm(it.querySelector(".bubble")))) });
 
   sheetEl.querySelectorAll(".rowgrid").forEach(row => {
@@ -759,6 +763,36 @@ const readBtn = document.getElementById("readBtn");
 const handles = { tl:document.getElementById("h-tl"), tr:document.getElementById("h-tr"),
                   bl:document.getElementById("h-bl"), br:document.getElementById("h-br") };
 let corners = null;
+let reviewState = "empty";
+let savedCount = 0;
+
+// Keep the current read in this tab through a reload. Scope it to the tasting,
+// wine and printed layout so another round cannot inherit the previous card.
+const readStorageKey = "wine-flight:last-read";
+const readScope = (() => {
+  const q = new URLSearchParams(location.search);
+  return JSON.stringify(["event","ids","wines","price","expectedPosition","nomarks"].map(k => q.get(k)));
+})();
+function forgetRead(){ try { sessionStorage.removeItem(readStorageKey); } catch(e){} }
+function rememberRead(result){
+  try {
+    sessionStorage.setItem(readStorageKey, JSON.stringify({
+      scope:readScope, when:Date.now(), result, corners, noMarks, forcedSide,
+      photo:srcCanvas.toDataURL("image/jpeg", 0.92),
+      preview:dstCanvas.toDataURL("image/jpeg", 0.85),
+    }));
+  } catch(e){ /* Storage may be unavailable; the live read still works. */ }
+}
+function rememberFiled(text, className, count = savedCount){
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(readStorageKey));
+    if (saved?.scope === readScope){
+      saved.filed = { text, className };
+      saved.count = count;
+      sessionStorage.setItem(readStorageKey, JSON.stringify(saved));
+    }
+  } catch(e){}
+}
 
 // The four reference points, in mm: the corner squares normally, the printed
 // rules when the squares never made it onto the paper.
@@ -846,7 +880,19 @@ let storedNoMarks = null;
 try { storedNoMarks = localStorage.getItem("cardv2-nomarks"); } catch(e){}
 setNoMarks(new URLSearchParams(location.search).get("nomarks") === "1" || storedNoMarks === "1", false);
 
-function loadImage(src){
+function loadImage(src, previous = null){
+  readBtn.disabled = true;
+  window.__cornersReady = false;
+  if (!previous){
+    reviewState = "empty";
+    window.scanWizard?.photoLoading();
+    forgetRead();
+    window.__lastRun = null;
+    document.getElementById("results").replaceChildren();
+    const filed = document.getElementById("filed"); if (filed) filed.hidden = true;
+    document.getElementById("overlayKey").hidden = true;
+    dstCtx.clearRect(0, 0, dstCanvas.width, dstCanvas.height);
+  }
   const im = new Image();
   im.onload = () => {
     const maxW = 1600;
@@ -901,22 +947,45 @@ function loadImage(src){
       for (const k of ["tl","tr","bl","br"]) out[k] = applyH(H, ANCHORS[k].x*SC, ANCHORS[k].y*SC);
       return out;
     };
+    if (previous){
+      corners = previous.corners;
+      layoutHandles();
+      window.__lastRun = previous.result;
+      render(previous.result);
+      const preview = new Image();
+      preview.onload = () => {
+        dstCanvas.width = preview.naturalWidth; dstCanvas.height = preview.naturalHeight;
+        dstCtx.drawImage(preview, 0, 0);
+        document.getElementById("overlayKey").hidden = false;
+      };
+      preview.src = previous.preview;
+      if (previous.filed){
+        const filed = document.getElementById("filed");
+        filed.hidden = false; filed.textContent = previous.filed.text; filed.className = previous.filed.className;
+      }
+      savedCount = Math.max(previous.count || 0, Number(new URLSearchParams(location.search).get("collected")) || 0);
+      setReviewState(previous.filed?.className === "filed ok" ? "saved" : "review");
+      statusEl.textContent = "Previous read restored.";
+      return;
+    }
     const auto = new URLSearchParams(location.search).get("auto") === "1";
     if (!MAP){
-      statusEl.textContent = "Photo loaded — waiting for the card layout…";
+      statusEl.textContent = "Photo loaded: waiting for the card layout…";
       if (auto) window.__autoPending = true;
       return;
     }
     statusEl.textContent = noMarks
       ? (missing.length
-          ? "Couldn't find the card's printed lines — put the handles on them (see above), then read."
+          ? "Couldn't find the card's printed lines: put the handles on them (see above), then read."
           : "Found the card on its printed lines. Check the handles, then read.")
       : missing.length
-        ? ("Found " + (4-missing.length) + "/4 corners — drag " + missing.join(", ") + " onto the black squares.")
+        ? ("Found " + (4-missing.length) + "/4 corners: drag " + missing.join(", ") + " onto the black squares.")
         : "Found all 4 corners. Check the handles, then read.";
-    if (auto) run();
+    if (window.scanWizard) window.scanWizard.photoReady();
+    else if (auto) run();
+    else readBtn.scrollIntoView({block:"center"});
   };
-  im.onerror = () => { statusEl.textContent = "Could not load that photo."; };
+  im.onerror = () => { statusEl.textContent = "Could not load that photo."; window.scanWizard?.error("This photo could not be opened. Take or choose another photo."); };
   im.src = src;
 }
 document.getElementById("file").addEventListener("change", e => {
@@ -926,11 +995,12 @@ document.getElementById("file").addEventListener("change", e => {
   loadImage(URL.createObjectURL(file));
 });
 
-readBtn.addEventListener("click", () => { statusEl.textContent="Reading…"; setTimeout(run, 20); });
+readBtn.addEventListener("click", () => { statusEl.textContent="Reading…"; window.scanWizard?.reading(); setTimeout(run, 20); });
 
 function run(){
-  if (!MAP){ statusEl.textContent = "Still loading the card layout — try again in a second."; return; }
+  if (!MAP){ statusEl.textContent = "Still loading the card layout: try again in a second."; return; }
   if (!corners){ statusEl.textContent = "Choose a photo first."; return; }
+  forgetRead();
   // rectify: map the four found marks onto their true positions
   const REF = refPoints();
   const H = solveH({ tl:{x:REF.tl.x*SC,y:REF.tl.y*SC}, tr:{x:REF.tr.x*SC,y:REF.tr.y*SC},
@@ -984,8 +1054,6 @@ function run(){
       });
   if (badMarks.length){
     window.__lastRun = { error:"marks", badMarks };
-    capture({ error:"marks", badMarks });
-    announce({ error:"marks", badMarks, groups:[], side:null });
     document.getElementById("results").innerHTML =
       `<div class="card"><div class="hdr"><span class="big">Can\u2019t read this photo</span>
        <span class="t">card-v2</span></div>
@@ -1002,7 +1070,8 @@ function run(){
             and the bottom two onto the <b>bottom corners of the \u201CRating\u201D box</b>, then read again.`
          : `Retake the photo with <b>all four black squares visible</b>, straight on and with the whole
             card in frame \u2014 or drag the green handles onto the squares and read again.`}</p></div>`;
-    statusEl.textContent = "Corners not lined up — nothing read.";
+    statusEl.textContent = "Corners not lined up: nothing read.";
+    window.scanWizard?.error();
     return;
   }
 
@@ -1077,8 +1146,6 @@ function run(){
                      name:g.name, y:+g.items[0].y.toFixed(1),
                      dx:+(fit.per[gi].dx/SC).toFixed(2), dy:+(fit.per[gi].dy/SC).toFixed(2) })) };
   window.__lastRun = result;
-  capture(result);
-  announce(result);
 
   // Always paint the overlay: a mis-placed map is instantly visible as circles
   // sitting off their bubbles, which no amount of staring at numbers reveals.
@@ -1102,52 +1169,73 @@ function run(){
     });
   });
   render(result);
+  rememberRead(result);
   document.getElementById("overlayKey").hidden = false;
   statusEl.textContent = side ? ("Read as the " + side + " side.")
-                              : "Could not read the side code — check the top-left of the card.";
+                              : "Could not read the side code: check the top-left of the card.";
+  if (!window.scanWizard) document.getElementById("results").scrollIntoView({block:"start"});
 }
 
-// When embedded in the app, hand the read up to the page around us. The parent
-// files it against a wine and a taster; this page stays usable standalone.
-// File the read directly. The page around us catches the same result by
-// postMessage and files it too - the two land on one row - but this path is
-// plain static JavaScript and keeps working when that page does not.
-function fileScan(result){
+// Saving is explicit. The scanner posts once, then tells the surrounding app
+// about the saved record without refreshing either page or moving the summary.
+function notifyParent(type, extra = {}){
+  if (window.parent !== window) window.parent.postMessage({type, eventId:new URLSearchParams(location.search).get("event"), ...extra}, location.origin);
+}
+function setReviewState(state){
+  reviewState = state;
+  const confirm = document.getElementById("confirmBtn"), next = document.getElementById("nextCardBtn"), retry = document.getElementById("retryCardBtn");
+  const hasEvent = !!new URLSearchParams(location.search).get("event");
+  if (confirm){ confirm.hidden = state === "saved"; confirm.disabled = state === "saving" || !hasEvent; confirm.textContent = state === "saving" ? "Saving…" : "Confirm & save"; }
+  const expected = Number(new URLSearchParams(location.search).get("expected")) || 0;
+  const complete = expected > 0 && savedCount >= expected;
+  if (next){ next.hidden = state !== "saved"; next.textContent = complete ? "Scan another card" : "Scan next card"; }
+  if (retry){ retry.hidden = state === "saved"; retry.disabled = state === "saving"; }
+  document.getElementById("file").disabled = state === "saving";
+  readBtn.disabled = state === "saving" || !MAP || !corners;
+  const help = document.getElementById("reviewHelp");
+  if (help) help.textContent = !hasEvent ? "Preview only. Open the scanner inside a tasting to save this card."
+    : state === "saved" ? (complete ? "✓ All cards collected for this wine. Ready for team answers on the host screen." : "Saved. Ready for the next card.")
+    : state === "saving" ? "Saving this card…"
+    : "Check the taster, wine and marks above. This card has not been saved yet.";
+  window.scanWizard?.reviewState(state);
+}
+function chooseNextCard(){
+  if (reviewState === "saving") return;
+  const input = document.getElementById("file");
+  input.value = "";
+  input.click();
+}
+async function fileScan(result){
   const eventId = new URLSearchParams(location.search).get("event");
-  if (!eventId || result.error) return;
+  if (!eventId || !result || result.error || reviewState === "saving" || reviewState === "saved") return;
+  setReviewState("saving");
+  notifyParent("card-v2-saving");
+  const el = document.getElementById("filed");
+  el.hidden = true;
   const priceGroup = (result.groups || []).find(g => g.name.toLowerCase() === "price");
-  fetch("/api/scan", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventId, result,
-      buckets: priceGroup ? priceGroup.reads.map(r => r.label) : undefined }),
-  })
-    .then(r => r.json())
-    .then(j => {
-      const el = document.getElementById("filed");
-      if (!el) return;
-      el.hidden = false;
-      el.className = "filed " + (j.ok ? "ok" : "bad");
-      el.textContent = j.ok
-        ? `Filed: ${j.taster} → ${j.wine}`
-        : `Not filed — ${j.error || "the tasting would not take it"}`;
-    })
-    .catch(() => {
-      const el = document.getElementById("filed");
-      if (!el) return;
-      el.hidden = false; el.className = "filed bad";
-      el.textContent = "Not filed — could not reach the tasting.";
+  try {
+    const response = await fetch("/api/scan", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({eventId, result, expectedPosition:new URLSearchParams(location.search).get("expectedPosition"),
+        buckets:priceGroup ? priceGroup.reads.map(r => r.label) : undefined}),
     });
-}
-
-function announce(result){
-  fileScan(result);
-  if (window.parent === window) return;
-  const priceGroup = (result.groups || []).find(g => g.name.toLowerCase() === "price");
-  window.parent.postMessage({
-    type: "card-v2-scan",
-    result,
-    buckets: priceGroup ? priceGroup.reads.map(r => r.label) : undefined,
-  }, "*");
+    const saved = await response.json();
+    if (!response.ok || !saved.ok) throw new Error(saved.error || "The tasting could not save this card.");
+    el.hidden = false; el.className = "filed ok";
+    el.textContent = `Saved: ${saved.taster} → ${saved.wine}`;
+    savedCount = saved.count;
+    window.__scanExpected = saved.expected;
+    rememberFiled(el.textContent, el.className);
+    setReviewState("saved");
+    notifyParent("card-v2-saved", {card:saved.card, count:saved.count});
+    capture(result);
+  } catch(error){
+    el.hidden = false; el.className = "filed bad";
+    el.textContent = "Not saved: " + (error.message || "could not reach the tasting. Please try again.");
+    rememberFiled(el.textContent, el.className);
+    setReviewState("review");
+    notifyParent("card-v2-save-error", {error:el.textContent});
+  }
 }
 
 // Send the photo and the full numbers back to the machine serving this page, so
@@ -1192,7 +1280,7 @@ function render(res){
       </div>
       <div class="row"><span class="k">Taster</span><span class="v">${one(you)}</span></div>
       <div class="row"><span class="k">Wine</span><span class="v">${one(wine)}</span></div>
-      <div class="row"><span class="k">Price guess</span><span class="v">${one(price)}</span></div>
+      ${price ? `<div class="row"><span class="k">Price guess</span><span class="v">${one(price)}</span></div>` : ""}
       <div class="row"><span class="k">Rating</span><span class="v">${rating && rating.value ? esc(rating.value)+" / 10" : "<span class='flag'>not marked</span>"}</span></div>
       <div class="row"><span class="k">Structure</span><span class="v">${
         structure.map(s => esc(s.name)+" "+(s.value ?? "–")).join(" · ")}</span></div>
@@ -1203,6 +1291,13 @@ function render(res){
           : "<span class='flag'>none marked</span>"}</span></div>
       ${flags.length ? `<div class="row"><span class="k">Check</span><span class="v flag">${
         flags.map(f => esc(f.name)+": "+esc(f.flag)).join(" · ")}</span></div>` : ""}
+      <p class="review-help" id="reviewHelp"></p>
+      <p class="filed" id="filed" role="status" aria-live="polite" hidden></p>
+      <div class="review-actions">
+        <button class="btn btn-primary" type="button" id="confirmBtn">Confirm &amp; save</button>
+        <button class="btn btn-primary" type="button" id="nextCardBtn" hidden>Scan next card</button>
+        <button class="btn" type="button" id="retryCardBtn">Retake card</button>
+      </div>
       <details>
         <summary>Per-bubble readings</summary>
         <table><thead><tr><th>Group</th><th>Option</th><th style="text-align:right">Fill</th></tr></thead><tbody>
@@ -1213,6 +1308,11 @@ function render(res){
         </tbody></table>
       </details>
     </div>`;
+  document.getElementById("confirmBtn").onclick = () => fileScan(res);
+  document.getElementById("nextCardBtn").onclick = chooseNextCard;
+  document.getElementById("retryCardBtn").onclick = chooseNextCard;
+  window.scanWizard?.summary();
+  setReviewState("review");
 }
 
 /* Wait for the reference card — including its webfonts. Measuring before the
@@ -1301,7 +1401,7 @@ function render(res){
       const wines = +(q.get("wines") || 4);
       if (!winesSel.options.length)
         winesSel.innerHTML = [2,3,4,5,6,7,8]
-          .map(n => `<option value="${n}">${n} — A to ${"ABCDEFGH"[n-1]}</option>`).join("");
+          .map(n => `<option value="${n}">${n}: A to ${"ABCDEFGH"[n-1]}</option>`).join("");
       winesSel.value = String(Math.min(8, Math.max(2, wines)));
       const reloadWith = (k, v) => {
         const u = new URL(location.href);
@@ -1313,6 +1413,7 @@ function render(res){
     })();
 
     window.__mapReady = true;
+    window.scanWizard?.layoutReady();
     const idRow = MAP.white.groups.filter(g => g.name.toLowerCase() === "you are");
     window.__ruler = {
       dpr: window.devicePixelRatio,
@@ -1325,15 +1426,25 @@ function render(res){
     // finishes second, and nothing else would ever re-enable the button.
     if (corners){
       readBtn.disabled = false;
-      statusEl.textContent = "Ready — tap Read card.";
+      statusEl.textContent = "Ready: tap Read card.";
       if (window.__autoPending){ window.__autoPending = false; run(); }
     } else {
-      statusEl.textContent = "Card layout loaded — choose a photo.";
+      statusEl.textContent = "Card layout loaded: choose a photo.";
     }
     const q = new URLSearchParams(location.search).get("img");
     if (q) loadImage(q);
+    else {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(readStorageKey));
+        if (saved?.scope === readScope && Date.now() - saved.when < 8*60*60*1000){
+          setNoMarks(saved.noMarks, false); setForcedSide(saved.forcedSide, false);
+          loadImage(saved.photo, saved);
+        }
+      } catch(e){}
+    }
   }));
 })(0);
 </script>
+<script src="/scanner-wizard.js"></script>
 </body>
 </html>

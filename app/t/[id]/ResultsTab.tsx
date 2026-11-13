@@ -16,7 +16,7 @@ import { Histogram, PriceSpread, StructureStrips } from "./Charts";
 
 type Taster = { id: string; idA: string; idB: string; name: string | null };
 
-const pct = (n: number | null | undefined) => (n == null ? "—" : `${Math.round(n * 100)}%`);
+const pct = (n: number | null | undefined) => (n == null ? "Not set" : `${Math.round(n * 100)}%`);
 
 export default function ResultsTab({ event }: {
   event: { id: string; revealMode: string; wines: WineRow[]; tasters: Taster[] };
@@ -88,7 +88,7 @@ export default function ResultsTab({ event }: {
           <section key={wine.id}>
             <div className="section-title">
               Wine {wine.position} · {wine.name}
-              {usedRoom && " — no answer key, so scored against the room"}
+              {usedRoom && ": no answer key, so scored against the room"}
             </div>
 
             <div className="split-even">
@@ -115,7 +115,7 @@ export default function ResultsTab({ event }: {
 
                 <div>
                   <span className="label">
-                    Structure{wine.keyBody != null || wine.keyAcidity != null ? " — gold is the answer" : ""}
+                    Structure{wine.keyBody != null || wine.keyAcidity != null ? ": gold is the answer" : ""}
                   </span>
                   <div style={{ marginTop: ".4rem" }}>
                     <StructureStrips wine={wine} />
@@ -124,7 +124,7 @@ export default function ResultsTab({ event }: {
 
                 <div>
                   <span className="label">
-                    Price{wine.priceBucket != null ? ` — it was ${PRICE_BUCKETS[wine.priceBucket]} kr` : ""}
+                    Price{wine.priceBucket != null ? `: it was ${PRICE_BUCKETS[wine.priceBucket]} kr` : ""}
                   </span>
                   <div style={{ marginTop: ".4rem" }}>
                     <PriceSpread
@@ -171,13 +171,13 @@ export default function ResultsTab({ event }: {
                       <td className="tabular" style={{ padding: ".35rem .5rem", textAlign: "right" }}>{pct(sc?.structure)}</td>
                       <td className="tabular" style={{ padding: ".35rem .5rem", textAlign: "right" }}>{pct(sc?.flavour)}</td>
                       <td className="tabular" style={{ padding: ".35rem 0 .35rem .5rem", textAlign: "right", fontWeight: 600 }}>
-                        {sc?.total == null ? "—" : `${sc.total}%`}
+                        {sc?.total == null ? "Not set" : `${sc.total}%`}
                       </td>
                       <td style={{ padding: ".35rem 0 .35rem .5rem", textAlign: "right" }}>
                         <form action={deleteSubmission}>
                           <input type="hidden" name="submissionId" value={s.id} />
                           <button className="btn btn-sm btn-quiet" type="submit"
-                                  title="Remove this card — use it for test scans">×</button>
+                                  title="Remove this card: use it for test scans">×</button>
                         </form>
                       </td>
                     </tr>
@@ -193,7 +193,7 @@ export default function ResultsTab({ event }: {
         <section>
           <div className="section-title">Who&rsquo;s who</div>
           <p className="lede" style={{ marginBottom: ".9rem" }}>
-            Nobody wrote a name on a card. Put real ones here and every screen reads properly.
+            Add people’s names to show them alongside their card names.
           </p>
           <div className="grid-wines" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))" }}>
             {event.tasters.map((t) => (

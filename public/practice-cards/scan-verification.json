@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "cards": 4,
+  "ids": "colours",
+  "wines": 2,
+  "price": false,
+  "sides": "WR",
+  "priceRowHidden": true,
+  "reloadRestoresExactRead": true,
+  "restoreDoesNotResubmit": true,
+  "restoreScopedToWine": true
+}

@@ -112,7 +112,7 @@ export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, 
                         gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: ".2rem 1.4rem" }}>
             {story.facts.map((f) => (
               <p key={f.head} className="small" style={{ fontSize: "clamp(.7rem,1.55vh,.87rem)", lineHeight: 1.45 }}>
-                <b style={{ color: "var(--ink)" }}>{f.head}</b> — {f.body}
+                <b style={{ color: "var(--ink)" }}>{f.head}</b>: {f.body}
               </p>
             ))}
           </div>
@@ -125,7 +125,7 @@ export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, 
                     gap: "clamp(.5rem,1.6vh,1.1rem)" }}>
         <div className="deck-panel">
           <span className="deck-label">It cost</span>
-          <span className="deck-stat">{dec(priceNok) ? `kr ${Number(dec(priceNok)).toFixed(0)}` : "—"}</span>
+          <span className="deck-stat">{dec(priceNok) ? `kr ${Number(dec(priceNok)).toFixed(0)}` : "Not set"}</span>
           <span className="small">
             {wine.priceBucket == null ? "no bucket set"
               : rightGuesses === null ? PRICE_BUCKETS[wine.priceBucket]
@@ -138,7 +138,7 @@ export function Reveal({ wine, revealMode, priceNok, producer, vintage, region, 
         </div>
         <div className="deck-panel">
           <span className="deck-label">The room gave it</span>
-          <span className="deck-stat">{roomRating == null ? "—" : `${roomRating.toFixed(1)}`}<span style={{ fontSize: ".4em" }}> / 10</span></span>
+          <span className="deck-stat">{roomRating == null ? "Not set" : `${roomRating.toFixed(1)}`}<span style={{ fontSize: ".4em" }}> / 10</span></span>
           <span className="small">
             {ratings.length ? `${ratings.length} scored it · spread ${Math.min(...ratings)}–${Math.max(...ratings)}` : "nobody scored it"}
           </span>
@@ -202,7 +202,7 @@ export function Room({ wine, revealMode }: { wine: WineRow; revealMode: string }
         </div>
 
         <div className="deck-panel">
-          <span className="deck-label">Structure{!hidden && hasKey(wine) ? " — gold is the answer" : ""}</span>
+          <span className="deck-label">Structure{!hidden && hasKey(wine) ? ": ✓ marks the reference" : ""}</span>
           <StructureStrips wine={hidden ? { ...wine, keyBody: null, keyAcidity: null, keyTannin: null, keySweetness: null, keyAlcohol: null } : wine} compact />
         </div>
 

@@ -1,55 +1,51 @@
-# Wine tasting — what's left
+# Wine Flight — next steps
 
-The setup decisions that used to live here (how many people, how many wines,
-what everyone's called, how much to print) are **now in the app**, on the Setup
-tab, where they belong. It does the arithmetic and warns you when a choice
-would invalidate a pack you've already printed.
+The guided blind quiz is implemented. See [README.md](./README.md) for the
+current workflow and [OVERNIGHT_HANDOFF.md](./OVERNIGHT_HANDOFF.md) for the build
+and verification notes.
 
----
+## Before using it at the table
 
-## 1. Only you can do these
+- [ ] Add the real teams and sizes in Setup. Existing tastings had no teams yet.
+- [ ] Check the Wines page. Refresh older bottle facts from Vinmonopolet, fill
+      any gaps, and confirm which matching categories are playable.
+- [ ] Choose Europe or World in Setup and confirm each region’s map reference
+      in Wines, if using the map bonus. The team map is included in the quiz pack.
+- [ ] Print one test sheet, fill it in with pen, scan it, then print the pack.
+- [ ] Test camera capture on the actual phone over HTTPS. Local browser/API and
+      saved-photo regressions passed; physical phone capture remains to check.
+- [ ] Cover the bottles and label them A–H to match the flight.
+- [ ] If a hosted URL is needed, connect and deploy the Render Blueprint.
+      The local work has not been deployed.
 
-- [ ] **Deploy to Render.** `render.yaml` is in the repo, so: render.com →
-      **New → Blueprint** → connect `seamuu/wine-tasting-app` → Apply. It
-      creates the web service and a free Postgres and runs the migrations.
-- [ ] **Test the scanner on the Render URL, from your actual phone.** The
-      camera needs HTTPS, which Render gives you and your laptop doesn't. This
-      is the one thing most likely to bite on the night.
-- [ ] **Fill in Setup, then print one sheet**, fill it in, scan it, and only
-      then print the rest.
-- [ ] **Bag or number the bottles** so A/B/C/D matches what's in the glass.
-- [ ] **Pens, not pencils.** The scanner wants dark marks.
+## Optional future features
 
-## 2. Still to build
+- [ ] Export the final comparison and standings as an image or PDF.
+- [ ] Add a custom host-written introduction or “why I chose this bottle” note.
 
-- [ ] **The wine dossier** — Vinmonopolet link → infographic. Mock-up only.
-- [ ] **Per-wine notes on the reveal slide** — there's room for a line of
-      "why this wine" if you want to say something about each one.
-- [ ] **Export the results** as an image or PDF to post afterwards.
+## Built and verified
 
-## 3. Known limits
+- Setup: teams and sizes, 2–8 wines, print quantities and readiness.
+- Wine import: embedded Vinmonopolet JSON, grapes, sensory ratings, educational
+  grape notes, pairings and measured label figures, with manual corrections.
+- Always blind, with one explicit Save & reveal action per wine.
+- Guided sequence: scan cards → team answers → wine story → room tasting →
+  quiz results → cumulative standings → next wine.
+- Saved current wine and step, live room display, historical review without
+  moving the live cursor, and protection against repeated/stale forms.
+- Europe/world grid maps: offline outlines, host-confirmed region references,
+  blank printable team maps, per-wine cell guesses, pin reveals and neighbour
+  half points. Map areas lock after collection; old scores are unchanged.
+- Team quiz totals, average points per wine, topic leaders, ties and missing
+  answers; personal ratings build the bottle comparison separately.
+- Per-wine scanner context, manual entry and corrections, safe re-scans, and
+  frozen printed-card settings after collection starts.
+- End-to-end five-wine browser test, parser/scoring tests, vocabulary checks,
+  photographed-card regression, production build and existing-data preservation.
 
-- **Scanning wants flat, even light.** Hard shadows across the card have been
-  the main failure mode. Even light beats bright light.
-- **Re-scanning is safe.** Same person + same wine replaces the earlier read.
-- **A card with no wine letter or no name bubbles can't be filed** — the
-  scanner says so rather than guessing. Type it in by hand instead.
-- **`npx prisma migrate dev` has to be run by you**, in your own terminal — it
-  needs an interactive prompt Claude can't answer. Render uses `migrate deploy`,
-  which is fine.
-- **`npm run check:vocab`** fails if the card's aroma list and `lib/flavours.ts`
-  ever drift apart. Run it after editing either.
+## Ongoing checks
 
----
-
-## Done
-
-- Setup tab: guests, wines, vocabulary, reveal mode, print arithmetic, readiness
-- Up to **8 wines** (A–H), on the card and throughout
-- Wines tab: Vinmonopolet lookup, or just a name; full answer key including aromas
-- Scan tab, plus **type a card in by hand** when a photo won't read
-- Run screen for your phone: cards-in counts, pour → cards in → reveal
-- Present deck: arrow keys, fullscreen, one screen per slide, never scrolls
-- Blind mode actually hides the wine until you reveal it
-- Match scoring (price 25 / structure 35 / aroma 40), leaderboard, superlatives
-- Results tab: flavour wheel, ratings, structure, price, per-person breakdown
+Use flat cards and even lighting. A card needs its wine letter and both name
+bubbles before it can be filed. Run `npm run check:vocab` after editing either
+the printed vocabulary or its server-side copy. Migration commands use
+`--config prisma7.config.ts`; `npm run db:migrate` applies committed migrations.

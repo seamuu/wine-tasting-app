@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import PrintedMapSheet from "../PrintedMapSheet";
+import { mapMode, mapEnabled } from "@/lib/map";
 import { prisma } from "@/lib/prisma";
 import {
   CATEGORIES, CATEGORY_META, OPTION_LABELS, optionFor, optionOrder, playable,
@@ -13,8 +15,8 @@ export const dynamic = "force-dynamic";
  * One per team for the whole night, rather than one per person per wine. Every
  * category is a permutation — four wines, four answers, one each — so filling
  * it in is a conversation the whole table has to have, which is the entire
- * point. Teams rearrange it as they learn: nothing is locked until it is
- * handed in.
+ * point. Teams hand in the current wine’s row before its reveal; future
+ * rows remain blank until those wines are poured.
  *
  * Not scanned. There are only two of these and sixteen answers on each, so the
  * host types them in; building a reader for a one-off layout would cost more
@@ -22,18 +24,22 @@ export const dynamic = "force-dynamic";
  */
 export default async function QuizSheetPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ teams?: string }>;
+  searchParams: Promise<{ teams?: string; maps?: string }>;
 }) {
   const { id } = await params;
-  const { teams: teamsParam } = await searchParams;
-  const teams = Math.min(6, Math.max(1, parseInt(teamsParam ?? "2", 10) || 2));
+  const { teams: teamsParam, maps } = await searchParams;
+  const extraSheets = Math.min(20, Math.max(1, parseInt(teamsParam ?? "1", 10) || 1));
 
   const event = await prisma.event.findUnique({
     where: { id },
-    include: { wines: { orderBy: { position: "asc" } } },
+    include: { wines: { orderBy: { position: "asc" } }, teams: { orderBy: { name: "asc" } } },
   });
   if (!event) notFound();
 
+  const mode = mapMode(event.mapMode);
+  const mapOnly = maps === "only";
+  const sheets = event.teams.length ? event.teams.map((team) => ({ name: team.name, size: team.memberCount }))
+    : Array.from({ length: extraSheets }, (_, i) => ({ name: `Team ${i + 1}`, size: null }));
   const wines = event.wines as unknown as QuizWine[];
   const live = CATEGORIES.filter((c) => playable(wines, c));
   const dropped = CATEGORIES.filter((c) => !playable(wines, c))
@@ -46,33 +52,33 @@ export default async function QuizSheetPage({ params, searchParams }: {
         @media print { .no-print { display: none !important; } }
         .qs { font-family: var(--font-body), system-ui, sans-serif; color: #241A15; }
         .qs-sheet { page-break-after: always; }
-        .qs-sheet:last-child { page-break-after: auto; }
+        .qs-team-pack:last-child .qs-sheet:last-child { page-break-after: auto; break-after: auto; }
         .qs-opt { break-inside: avoid; }
       `}</style>
 
       <main className="qs" style={{ maxWidth: "186mm", margin: "0 auto", padding: "8mm 0 20mm" }}>
-        {dropped.length > 0 && (
+        {!mapOnly && dropped.length > 0 && (
           <div className="no-print" style={{ border: "1px solid #8A5A00", background: "#FBF2DF", color: "#8A5A00",
                                              borderRadius: 8, padding: "1rem 1.2rem", marginBottom: "2rem", fontSize: ".88rem", lineHeight: 1.6 }}>
             <b>Not printed:</b>{" "}
             {dropped.map(({ c, why }) => `${CATEGORY_META[c].title.toLowerCase()} (${why})`).join("; ")}.
             <br />
-            A matching round needs every wine to have its own distinct answer — if three of them
-            just say &ldquo;Italia&rdquo;, there is nothing to work out. Filling in the region or
-            appellation on the Wines tab brings the round back.
+            Each matching category needs a different answer for every wine. For origin,
+            add a region or appellation in Wines if the country names are the same.
           </div>
         )}
 
-        {live.length === 0 && (
+        {!mapOnly && live.length === 0 && (
           <p className="no-print" style={{ padding: "2rem" }}>
-            None of the categories can be printed yet — they need every wine in the flight to have
-            a price, a region, a tasting note or its grapes. Add the wines from their Vinmonopolet
-            links and this fills itself in.
+            No quiz categories are ready to print. Add prices, regions, tasting notes or grapes
+            in Wines. Each category needs a different answer for every wine.
           </p>
         )}
 
-        {Array.from({ length: teams }, (_, t) => (
-          <section key={t} className="qs-sheet">
+        {mapOnly && !mapEnabled(mode) && <p className="note no-print">The map round is off for this tasting. Choose Europe or World in Setup before printing.</p>}
+        {sheets.map((team, t) => (
+          <div key={t} className="qs-team-pack">
+          {!mapOnly && live.length > 0 && <section className="qs-sheet">
             <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end",
                              borderBottom: "1.5px solid #241A15", paddingBottom: "2mm", marginBottom: "5mm" }}>
               <div>
@@ -80,19 +86,20 @@ export default async function QuizSheetPage({ params, searchParams }: {
                   {event.name} · team answer sheet
                 </div>
                 <div style={{ fontFamily: "var(--font-display), Georgia, serif", fontSize: "20pt", fontWeight: 600, marginTop: "1mm" }}>
-                  Team {t + 1} &nbsp;<span style={{ fontSize: "11pt", color: "#6B5A4E" }}>…………………………</span>
+                  {team.name} {team.size != null && <span style={{ fontSize: "9pt", color: "#6B5A4E" }}>· {team.size} people</span>}
                 </div>
               </div>
               <div style={{ fontSize: "7.5pt", color: "#6B5A4E", textAlign: "right", maxWidth: "62mm", lineHeight: 1.45 }}>
-                Every answer is used <b>once</b>. Change your mind as often as you like —
-                nothing counts until you hand it in.
+                Each option belongs to one wine. Hand in your answers <b>one wine at a time</b>, before the host reveals that bottle.
               </div>
             </header>
 
-            {live.map((c) => (
+            <div className="quiz-print-blocks">{live.map((c) => (
               <QuizBlock key={c} category={c} wines={wines} eventId={event.id} />
-            ))}
-          </section>
+            ))}</div>
+          </section>}
+          {mapEnabled(mode) && <PrintedMapSheet eventName={event.name} teamName={team.name} positions={wines.map((wine) => wine.position)} mode={mode} />}
+          </div>
         ))}
       </main>
     </>
@@ -116,14 +123,14 @@ function QuizBlock({ category, wines, eventId }: {
       </div>
 
       {/* the pool: every one of these belongs to exactly one glass */}
-      <div style={{ display: "grid", gap: "1mm 4mm", marginBottom: "2.5mm",
-                    gridTemplateColumns: wide ? "1fr" : `repeat(${Math.min(4, order.length)}, 1fr)` }}>
+      <div className={`quiz-option-pool${wide ? " quiz-option-wide" : ""}`} style={{ display: "grid", gap: "1mm 4mm", marginBottom: "2.5mm",
+                    gridTemplateColumns: wide ? "minmax(0, 1fr)" : `repeat(${Math.min(4, order.length)}, minmax(0, 1fr))` }}>
         {order.map((w, i) => (
-          <div key={w.id} style={{ display: "flex", gap: "2mm", alignItems: "baseline", fontSize: wide ? "8pt" : "9pt" }}>
-            <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 600, color: "#6E1327" }}>
+          <div key={w.id} style={{ display: "flex", gap: "2mm", alignItems: "baseline", minWidth: 0, fontSize: wide ? "8pt" : "9pt" }}>
+            <span style={{ fontFamily: "var(--font-mono), monospace", fontWeight: 600, flexShrink: 0, color: "#6E1327" }}>
               {OPTION_LABELS[i]}
             </span>
-            <span style={{ lineHeight: 1.35 }}>{optionFor(w, category)}</span>
+            <span style={{ lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>{optionFor(w, category)}</span>
           </div>
         ))}
       </div>

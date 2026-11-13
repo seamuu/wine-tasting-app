@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import SubmitButton from "../../SubmitButton";
 import { addWine } from "../../actions";
 import { isPoletUrl, type PoletHit } from "@/lib/vinmonopolet";
 
@@ -68,6 +69,8 @@ export default function AddWine({ eventId, letters, used }: {
     if (hit.side) setSide(hit.side);
   }
 
+  if (letters.every((letter) => used.includes(letter))) return <p className="small">All wines added. <a href={`/t/${eventId}?tab=setup&step=print`}>Next: print your cards →</a></p>;
+
   return (
     <section className="card">
       <div className="section-title">Add a wine</div>
@@ -129,19 +132,19 @@ export default function AddWine({ eventId, letters, used }: {
         {picked || pasted ? (
           <p className="note note-olive" style={{ padding: ".6rem .8rem" }}>
             {picked
-              ? <><b>{picked.name}</b> — Polet {picked.code}. </>
+              ? <><b>{picked.name}</b>: Polet {picked.code}. </>
               : <>That link gets read when you add it. </>}
             Price, alcohol, sugar, acid, grapes and their tasting note all come across, and the
-            price round scores itself.{" "}
+            quiz categories fill themselves in.{" "}
             <button type="button" className="btn btn-sm btn-quiet"
                     onClick={() => type("")}>Clear</button>
           </p>
         ) : (
           <label className="field">
             <span className="label">Or just a name</span>
-            <input type="text" name="name" placeholder="The orange one Kristian brought" />
+            <input type="text" name="name" placeholder="The orange one Kristian brought" required />
             <span className="small">
-              Fine on its own — you lose the automatic price answer, so set that bucket yourself.
+              Then fill in the price, origin, grapes and tasting note in the wine’s details.
             </span>
           </label>
         )}
@@ -151,7 +154,7 @@ export default function AddWine({ eventId, letters, used }: {
             <span className="label">Letter</span>
             <select name="position" defaultValue={letters.find((l) => !used.includes(l)) ?? letters[0]}>
               {letters.map((p) => (
-                <option key={p} value={p}>{p}{used.includes(p) ? " — replaces what's there" : ""}</option>
+                <option key={p} value={p} disabled={used.includes(p)}>{p}{used.includes(p) ? ": already added" : ""}</option>
               ))}
             </select>
           </label>
@@ -164,7 +167,7 @@ export default function AddWine({ eventId, letters, used }: {
           </label>
         </div>
 
-        <button className="btn btn-primary" type="submit">Add to the flight</button>
+        <div><SubmitButton pending="Reading bottle facts…">Add to the flight</SubmitButton></div>
       </form>
     </section>
   );

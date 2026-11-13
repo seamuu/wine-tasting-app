@@ -1,13 +1,4 @@
-/**
- * Turning a scanner reading into a submission.
- *
- * Lives outside the React component because two callers need it: the Scan tab,
- * which files a result the embedded scanner hands it, and /api/scan, which the
- * scanner posts to directly. The second exists because the first depends on the
- * page around the scanner being alive, and a dev-server restart is enough to
- * leave it holding dead JavaScript - the card reads, and the result goes
- * nowhere.
- */
+/** Convert a confirmed scanner reading to a validated submission payload. */
 import { POSITIONS, type Position } from "@/lib/card";
 import type { ScanPayload } from "@/app/actions";
 

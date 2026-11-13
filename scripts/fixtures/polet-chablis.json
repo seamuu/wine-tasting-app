@@ -1,0 +1,114 @@
+{
+  "product": {
+    "name": "Laroche Chablis 2025",
+    "code": "668001",
+    "color": "Lys grønngul.",
+    "content": {
+      "characteristics": [
+        {
+          "description": "Forteller om inntrykket av vekt og rikhet i munnen. Alkohol, tannin og glyserol (tyktflytende) bidrar til fylde. Tenk på forskjellen på skummet melk og helmelk. Fylde handler bare om struktur og munnfølelse, ikke aroma eller kvalitet.",
+          "name": "Fylde",
+          "readableValue": "Fylde, 6 av 12",
+          "value": "6"
+        },
+        {
+          "description": "Forteller hvor forfriskende syrligheten oppleves. Produktene våre inneholder ulike syrer fra råvarer og fermentering. Dette gir drikken friskhet og liv.",
+          "name": "Friskhet",
+          "readableValue": "Friskhet, 9 av 12",
+          "value": "9"
+        },
+        {
+          "description": "Forteller hvor tydelig søtsmaken oppleves. Ulike sukkerarter gir den søte smaken. Det kan være naturlig fra druene i en vin eller tilsatt som i en likør.",
+          "name": "Sødme",
+          "readableValue": "Sødme, 1 av 12",
+          "value": "1"
+        }
+      ],
+      "ingredients": [
+        {
+          "code": "088",
+          "description": "Fransk hvitvinsdrue. Regnes av mange som verdens beste hvitvindrue og den dyrkes nesten overalt hvor det lages vin. Vinene er som regel tørre, men varierer mye i stil. Fra syrlig og slank til fet og fatlagret. Samt delikat og kompleks musserende vin",
+          "formattedValue": "Chardonnay 100%",
+          "name": "Chardonnay",
+          "readableValue": "Chardonnay 100 prosent",
+          "type": "green"
+        }
+      ],
+      "isGoodFor": [
+        {
+          "code": "A",
+          "name": "Aperitiff"
+        },
+        {
+          "code": "B",
+          "name": "Skalldyr"
+        },
+        {
+          "code": "C",
+          "name": "Fisk"
+        }
+      ],
+      "storagePotential": {
+        "code": "Y",
+        "formattedValue": "Drikkeklar nå, men kan også lagres"
+      },
+      "style": {
+        "code": "stil003",
+        "description": "Slanke viner med god friskhet, middels fylde og alkohol. Smak av grønt eple, pære, sitron, lime og urter. Passer til lette og ferske matretter, bl.a. reker, salater, lette vegetarretter.",
+        "image": {
+          "url": "https://cdn.sanity.io/images/iv1p66d7/production/9bcbebf848ce8b3b8fb8d2fd17edc011bbfc4fd5-3840x2160.jpg?w=263&auto=format"
+        },
+        "name": "Lett og frisk"
+      },
+      "traits": [
+        {
+          "formattedValue": "12%",
+          "name": "Alkohol",
+          "readableValue": "12 prosent"
+        },
+        {
+          "formattedValue": "Under 3 g/l",
+          "name": "Sukker",
+          "readableValue": "Under 3 gram per liter"
+        },
+        {
+          "formattedValue": "5,9 g/l",
+          "name": "Syre",
+          "readableValue": "5,9 gram per liter"
+        }
+      ]
+    },
+    "main_producer": {
+      "code": "dom_laroche",
+      "name": "Dom. Laroche",
+      "searchQuery": ":name-asc:brand:dom_laroche",
+      "url": "/search?searchType=product&q=:name-asc:brand:dom_laroche"
+    },
+    "main_country": {
+      "code": "frankrike",
+      "name": "Frankrike",
+      "searchQuery": ":relevance:mainCountry:frankrike",
+      "url": "/search?searchType=product&q=:relevance:mainCountry:frankrike"
+    },
+    "district": {
+      "code": "frankrike_burgund",
+      "name": "Burgund",
+      "searchQuery": ":relevance:mainDistrict:frankrike_burgund:mainCountry:frankrike",
+      "url": "/search?searchType=product&q=:relevance:mainDistrict:frankrike_burgund:mainCountry:frankrike"
+    },
+    "sub_District": {
+      "code": "frankrike_burgund_chablis",
+      "name": "Chablis",
+      "searchQuery": ":relevance:mainSubDistrict:frankrike_burgund_chablis:mainDistrict:frankrike_burgund:mainCountry:frankrike",
+      "url": "/search?searchType=product&q=:relevance:mainSubDistrict:frankrike_burgund_chablis:mainDistrict:frankrike_burgund:mainCountry:frankrike"
+    },
+    "price": {
+      "formattedValue": "Kr 245,00",
+      "readableValue": "245 kroner",
+      "value": 245
+    },
+    "smell": "Aroma av modent eple, sitrus og gul steinfrukt, innslag av urter, mineraler, litt smør og nøtt.",
+    "taste": "Saftig og frisk, middels fylde, preg av sitrus, eple og urter, innslag av smør, nøtt og mineraler.",
+    "year": "2025"
+  }
+}

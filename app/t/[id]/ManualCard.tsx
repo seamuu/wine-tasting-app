@@ -32,11 +32,13 @@ export type CardValues = {
   rating: number | null; flavours: string[];
 };
 
-export default function ManualCard({ eventId, idSet, wines, fixing }: {
+export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, priceOnCard = true }: {
   eventId: string;
   idSet: { label: string; a: string[]; b: string[] };
   wines: WineRow[];
   fixing?: CardValues | null;
+  returnTo?: "run";
+  priceOnCard?: boolean;
 }) {
   const [position, setPosition] = useState(fixing?.position ?? wines[0]?.position ?? "A");
   const wine = wines.find((w) => w.position === position);
@@ -48,16 +50,17 @@ export default function ManualCard({ eventId, idSet, wines, fixing }: {
   return (
     <details className="card" style={{ marginTop: "1.2rem" }} open={!!fixing} id="manual-card">
       <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: ".9rem" }}>
-        {fixing ? `Fixing ${fixing.idA} ${fixing.idB} — wine ${fixing.position}` : "Type a card in by hand"}
+        {fixing ? `Fixing ${fixing.idA} ${fixing.idB}: wine ${fixing.position}` : "Type a card in by hand"}
       </summary>
       <p className="small" style={{ margin: ".6rem 0 1.2rem" }}>
         {fixing
-          ? "Everything the scan read is filled in below. Change what is wrong and save — it replaces the card rather than adding another."
+          ? "Everything the scan read is filled in below. Change what is wrong and save: it replaces the card rather than adding another."
           : "For a card the camera won\u2019t read. It files exactly like a scan, so if you get the photo working later it just replaces this."}
       </p>
 
       <form action={saveManualCard} className="stack" style={{ gap: "1.4rem" }}>
         <input type="hidden" name="eventId" value={eventId} />
+        {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
 
         <div className="stack" style={{ gap: ".7rem" }}>
           <div>
@@ -77,7 +80,7 @@ export default function ManualCard({ eventId, idSet, wines, fixing }: {
           </div>
 
           <div>
-            <span className="label">Who filled it in — {idSet.label}</span>
+            <span className="label">Who filled it in: {idSet.label}</span>
             <div className="row" style={{ gap: "1rem", marginTop: ".35rem", alignItems: "flex-start" }}>
               <div className="chips">{idSet.a.map((c) => <Chip key={c} name="idA" value={c} label={c} defaultChecked={fixing?.idA === c} />)}</div>
               <div className="chips" style={{ paddingLeft: "1rem", borderLeft: "1px solid var(--rule)" }}>
@@ -87,18 +90,18 @@ export default function ManualCard({ eventId, idSet, wines, fixing }: {
           </div>
         </div>
 
-        <div>
-          <span className="label">Price guess — NOK</span>
+        {priceOnCard && <div>
+          <span className="label">Price guess: NOK</span>
           <div className="chips" style={{ marginTop: ".35rem" }}>
             {PRICE_BUCKETS.map((b, i) => (
               <Chip key={b} name="priceBucket" value={String(i)} label={b}
                     defaultChecked={fixing?.priceBucket === i} />
             ))}
           </div>
-        </div>
+        </div>}
 
         <div className="stack" style={{ gap: ".5rem" }}>
-          <span className="label">Structure — 1 to 5</span>
+          <span className="label">Structure: 1 to 5</span>
           {STRUCTURE.map((row) => (
             <div key={row.attr} className="field-row">
               <div>
@@ -116,12 +119,12 @@ export default function ManualCard({ eventId, idSet, wines, fixing }: {
         </div>
 
         <div>
-          <span className="label">Aroma &amp; flavour — {side === "RED" ? "red" : "white"} side</span>
+          <span className="label">Aroma &amp; flavour: {side === "RED" ? "red" : "white"} side</span>
           <div className="stack" style={{ gap: "1rem", marginTop: ".5rem" }}>
             {TIERS.map((tier) => (
               <div key={tier}>
                 <div className="small" style={{ marginBottom: ".4rem" }}>
-                  <b style={{ color: "var(--ink)" }}>{tier}</b> — {TIER_BLURB[tier]}
+                  <b style={{ color: "var(--ink)" }}>{tier}</b>: {TIER_BLURB[tier]}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: ".7rem" }}>
                   {cats.filter((c) => c.tier === tier).map((c) => (
@@ -145,7 +148,7 @@ export default function ManualCard({ eventId, idSet, wines, fixing }: {
         </div>
 
         <div>
-          <span className="label">Rating — 1 to 10</span>
+          <span className="label">Rating: 1 to 10</span>
           <div className="chips" style={{ marginTop: ".35rem" }}>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
               <Chip key={n} name="rating" value={String(n)} label={String(n)}

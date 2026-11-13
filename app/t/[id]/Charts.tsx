@@ -33,7 +33,7 @@ export function Histogram({ bins, average }: { bins: number[]; average: number |
       </div>
       {average != null && (
         <p className="small" style={{ marginTop: ".35rem", textAlign: "center" }}>
-          room average <b style={{ color: "var(--ink)" }}>{average.toFixed(1)}</b>
+          Group average <b style={{ color: "var(--ink)" }}>{average.toFixed(1)}</b>
         </p>
       )}
     </div>
@@ -59,19 +59,18 @@ export function StructureStrips({ wine, compact = false }: { wine: WineRow; comp
             {row.counts.map((n, i) => {
               const isAnswer = row.answer === i + 1;
               return (
-                <span key={i} title={`${n} said ${i + 1}`} style={{
-                  display: "block", height: compact ? 14 : 18, borderRadius: 3,
-                  background: n === 0 ? "var(--paper-3)" : "var(--claret)",
-                  opacity: n === 0 ? 1 : 0.3 + 0.7 * (n / peak),
-                  outline: isAnswer ? "2px solid var(--gold)" : undefined,
+                <span key={i} title={`${n} people chose ${i + 1}${isAnswer ? " · reference value" : ""}`} style={{
+                  display: "block", position: "relative", height: compact ? 14 : 18, borderRadius: 3,
+                  background: n === 0 ? "var(--paper-3)" : `rgba(110,19,39,${0.3 + 0.7 * (n / peak)})`,
+                  outline: isAnswer ? "3px solid var(--reference)" : undefined,
                   outlineOffset: 1,
-                }} />
+                }}>{isAnswer && <span className="reference-tick" aria-label={`Reference ${row.answer}`}>✓</span>}</span>
               );
             })}
           </div>
-          <span className="small tabular" style={{ fontSize: ".7rem", minWidth: "2.6rem", textAlign: "right" }}>
-            {row.average == null ? "—" : row.average.toFixed(1)}
-            {row.answer != null && <span style={{ color: "var(--gold)" }}> /{row.answer}</span>}
+          <span className="small tabular" style={{ fontSize: ".7rem", minWidth: "5.3rem", textAlign: "right" }}>
+            Avg {row.average == null ? "Not set" : row.average.toFixed(1)}
+            {row.answer != null && <span className="reference-value">✓ Ref {row.answer}</span>}
           </span>
         </div>
       ))}
@@ -87,10 +86,10 @@ export function PriceSpread({ guesses, answer }: { guesses: number[]; answer: nu
     <div>
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${PRICE_BUCKETS.length},1fr)`, gap: 2, alignItems: "end", height: 54 }}>
         {counts.map((n, i) => (
-          <span key={i} title={`${PRICE_BUCKETS[i]} kr — ${n}`} style={{
+          <span key={i} title={`${PRICE_BUCKETS[i]} kr: ${n}`} style={{
             display: "block",
             height: `${Math.max(n > 0 ? 10 : 3, (n / peak) * 100)}%`,
-            background: i === answer ? "var(--gold)" : n > 0 ? "var(--claret)" : "var(--rule)",
+            background: i === answer ? "var(--reference)" : n > 0 ? "var(--claret)" : "var(--rule)",
             borderRadius: "2px 2px 0 0",
           }} />
         ))}
@@ -102,8 +101,8 @@ export function PriceSpread({ guesses, answer }: { guesses: number[]; answer: nu
           {PRICE_BUCKETS[0]}
         </span>
         {answer != null && (
-          <span className="small" style={{ fontSize: ".68rem", color: "var(--gold)", fontWeight: 600 }}>
-            {PRICE_BUCKETS[answer]} kr
+          <span className="small" style={{ fontSize: ".68rem", color: "var(--reference)", fontWeight: 600 }}>
+            Correct: kr {PRICE_BUCKETS[answer]}
           </span>
         )}
         <span className="small" style={{ fontSize: ".65rem", visibility: answer === PRICE_BUCKETS.length - 1 ? "hidden" : undefined }}>

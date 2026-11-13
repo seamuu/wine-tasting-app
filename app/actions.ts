@@ -1,11 +1,15 @@
 "use server";
 
+import { demoAnswerRows, PRACTICE_WINES } from "@/lib/demo";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { bucketForPrice, POSITIONS, type Position } from "@/lib/card";
+import { bucketForPrice, ID_SETS, POSITIONS, type Position } from "@/lib/card";
 import { fetchPolet, draftKey } from "@/lib/vinmonopolet";
-import { CATEGORIES, optionOrder, type QuizWine } from "@/lib/quiz";
+import type { Prisma } from "@/app/generated/prisma/client";
+import { CATEGORIES, optionOrder, playable, type QuizWine } from "@/lib/quiz";
+import { isRoundStep, nextRound } from "@/lib/rounds";
+import { mapMode, mapEnabled, mapRoundReady, parseCell, pointCell } from "@/lib/map";
 import type { QuizCategory } from "@/app/generated/prisma/enums";
 
 const str = (v: FormDataEntryValue | null) => {
@@ -24,7 +28,9 @@ export async function createEvent(form: FormData) {
     data: {
       name: str(form.get("name")) ?? "Untitled tasting",
       idSet: str(form.get("idSet")) ?? "house",
-      revealMode: str(form.get("revealMode")) === "OPEN" ? "OPEN" : "BLIND",
+      revealMode: "BLIND",
+      priceOnCard: false,
+      mapMode: "EUROPE",
     },
   });
   redirect(`/t/${event.id}`);
@@ -39,20 +45,48 @@ export async function createEvent(form: FormData) {
 export async function updateEvent(form: FormData) {
   const id = String(form.get("eventId"));
   const wineCount = int(form.get("wineCount"));
+  const existing = await prisma.event.findUnique({ where: { id }, include: {
+    wines: { include: { _count: { select: { submissions: true, guessesAbout: true, mapGuesses: true } } } },
+  } });
+  if (!existing) return;
+  const started = existing.wines.some((wine) => wine.stage !== "UPCOMING" || wine._count.submissions > 0 || wine._count.guessesAbout > 0);
+  const changesPrintedCard = wineCount != null && wineCount !== existing.wineCount
+    || form.has("idSet") && str(form.get("idSet")) !== existing.idSet
+    || form.has("priceOnCard") && (str(form.get("priceOnCard")) === "1") !== existing.priceOnCard;
+  const requestedMap = form.has("mapMode") ? mapMode(form.get("mapMode")) : undefined;
+  const mapLocked = existing.wines.some((wine) => wine.stage === "LOCKED" || wine.stage === "REVEALED" || wine._count.guessesAbout > 0 || wine._count.mapGuesses > 0);
+  if (mapLocked && requestedMap != null && requestedMap !== existing.mapMode) redirect(`/t/${id}?tab=setup&settingsError=map`);
+  if (started && changesPrintedCard) redirect(`/t/${id}?tab=setup&settingsError=started`);
   await prisma.event.update({
     where: { id },
     data: {
       name: str(form.get("name")),
       idSet: str(form.get("idSet")),
-      revealMode: form.get("revealMode") == null
-        ? undefined
-        : str(form.get("revealMode")) === "OPEN" ? "OPEN" : "BLIND",
+      revealMode: "BLIND",
+      mapMode: requestedMap,
       wineCount: wineCount == null ? undefined : Math.min(8, Math.max(2, wineCount)),
       guestCount: form.get("guestCount") == null ? undefined : (int(form.get("guestCount")) ?? null),
       priceOnCard: form.has("priceOnCard") ? str(form.get("priceOnCard")) === "1" : undefined,
     },
   });
   revalidatePath(`/t/${id}`, "layout");
+  const nextStep = str(form.get("nextSetupStep"));
+  if (nextStep === "teams" || nextStep === "print") redirect(`/t/${id}?tab=setup&step=${nextStep}`);
+}
+
+export async function resetResults(form: FormData) {
+  const id = str(form.get("eventId"));
+  if (!id || form.get("confirmReset") !== "yes") return;
+  await prisma.$transaction(async (tx) => {
+    await tx.submission.deleteMany({ where: { eventId: id } });
+    await tx.teamGuess.deleteMany({ where: { team: { eventId: id } } });
+    await tx.teamMapGuess.deleteMany({ where: { team: { eventId: id } } });
+    await tx.wine.updateMany({ where: { eventId: id }, data: { stage: "UPCOMING", keyLockedAt: null } });
+    await tx.event.update({ where: { id }, data: { activePosition: "A", runStep: "COLLECT", revealMode: "BLIND" } });
+  });
+  revalidatePath(`/t/${id}`, "layout");
+  revalidatePath("/");
+  redirect(`/t/${id}?tab=setup&reset=saved`);
 }
 
 export async function deleteEvent(form: FormData) {
@@ -73,6 +107,11 @@ export async function addWine(form: FormData) {
   const position = (POSITIONS.includes(asked as Position) ? asked : "A") as Position;
   const side = str(form.get("side")) === "RED" ? "RED" : "WHITE";
   const url = str(form.get("sourceUrl"));
+  const event = await prisma.event.findUnique({ where: { id: eventId }, include: { wines: { include: { _count: { select: { submissions: true, guessesAbout: true, mapGuesses: true } } } } } });
+  if (!event || !POSITIONS.slice(0, event.wineCount).includes(position)) return;
+  if (event.wines.some((wine) => wine.position === position || wine.stage !== "UPCOMING" || wine._count.submissions > 0 || wine._count.guessesAbout > 0 || wine._count.mapGuesses > 0)) {
+    redirect(`/t/${eventId}?tab=wines&lookup=occupied`);
+  }
 
   type WineFields = {
     name: string;
@@ -80,6 +119,9 @@ export async function addWine(form: FormData) {
     appellation?: string; grapes?: string; tastingNote?: string;
     sourceUrl?: string; sourceRef?: string;
     priceNok?: string; alcohol?: string; sugarGl?: string; acidGl?: string;
+    colour?: string; smell?: string; taste?: string; storage?: string;
+    bodyRaw?: number; acidRaw?: number; tanninRaw?: number; sweetRaw?: number;
+    foodPairing?: string[]; grapeNotes?: Prisma.InputJsonValue;
     priceBucket?: number;
     keyBody?: number; keyAcidity?: number; keyTannin?: number;
     keySweetness?: number; keyAlcohol?: number;
@@ -106,6 +148,12 @@ export async function addWine(form: FormData) {
         alcohol: w.alcohol?.toFixed(2),
         sugarGl: w.sugarGl?.toFixed(2),
         acidGl: w.acidGl?.toFixed(2),
+        colour: w.colour, smell: w.smell, taste: w.taste, storage: w.storage,
+        bodyRaw: w.bodyRaw, acidRaw: w.acidRaw, tanninRaw: w.tanninRaw, sweetRaw: w.sweetRaw,
+        foodPairing: w.foodPairing ?? [],
+        // Prisma types Json columns as its own input union; a plain array of
+        // objects satisfies it at runtime but not structurally.
+        grapeNotes: w.grapeNotes as unknown as Prisma.InputJsonValue | undefined,
         priceBucket: w.priceNok != null ? bucketForPrice(w.priceNok) : undefined,
         ...draftKey(w),
       };
@@ -115,11 +163,14 @@ export async function addWine(form: FormData) {
     }
   }
 
-  await prisma.wine.upsert({
-    where: { eventId_position: { eventId, position } },
-    create: { eventId, position, side, ...data },
-    update: { side, ...data },
-  });
+  try {
+    await prisma.wine.create({ data: { eventId, position, side, ...data } });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      redirect(`/t/${eventId}?tab=wines&lookup=occupied`);
+    }
+    throw error;
+  }
 
   revalidatePath(`/t/${eventId}`, "layout");
   if (lookupError) redirect(`/t/${eventId}?tab=wines&lookup=failed`);
@@ -140,6 +191,14 @@ export async function updateWine(form: FormData) {
 
   if (form.has("name")) data.name = str(form.get("name")) ?? undefined; // never blank the name
   text("producer"); text("teaser");
+  text("country"); text("region"); text("appellation"); text("grapes"); text("tastingNote");
+  if (form.has("priceNok")) {
+    const raw = str(form.get("priceNok"));
+    const price = raw ? Number(raw.replace(",", ".")) : null;
+    if (price != null && (!Number.isFinite(price) || price < 0)) return;
+    data.priceNok = price;
+    data.priceBucket = price == null ? null : bucketForPrice(price);
+  }
   whole("vintage"); whole("priceBucket");
   whole("keyBody"); whole("keyAcidity"); whole("keyTannin");
   whole("keySweetness"); whole("keyAlcohol");
@@ -169,6 +228,11 @@ export async function deleteSubmission(form: FormData) {
 
 export async function deleteWine(form: FormData) {
   const id = String(form.get("wineId"));
+  const existing = await prisma.wine.findUnique({ where: { id }, include: { event: { include: { wines: { include: { _count: { select: { submissions: true, guessesAbout: true, mapGuesses: true } } } } } } } });
+  if (!existing) return;
+  if (existing.event.wines.some((wine) => wine.stage !== "UPCOMING" || wine._count.submissions || wine._count.guessesAbout || wine._count.mapGuesses)) {
+    redirect(`/t/${existing.eventId}?tab=wines&lookup=occupied`);
+  }
   const wine = await prisma.wine.delete({ where: { id } });
   revalidatePath(`/t/${wine.eventId}`, "layout");
 }
@@ -249,7 +313,7 @@ export async function saveScan(payload: ScanPayload) {
   });
 
   revalidatePath(`/t/${payload.eventId}`, "layout");
-  return { ok: true as const, taster: `${taster.idA} ${taster.idB}`, wine: wine.name };
+  return { ok: true as const, taster: `${taster.idA} ${taster.idB}`, wine: `Wine ${wine.position}` };
 }
 
 /**
@@ -266,12 +330,14 @@ export async function saveManualCard(form: FormData) {
   const idA = str(form.get("idA"));
   const idB = str(form.get("idB"));
 
-  if (!idA || !idB) redirect(`/t/${eventId}?tab=scan&manual=who`);
+  const returnTo = str(form.get("returnTo")) === "run"
+    ? `/t/${eventId}/run?wine=${position}&step=COLLECT` : `/t/${eventId}?tab=scan`;
+  if (!idA || !idB) redirect(`${returnTo}&manual=who`);
 
   const wine = await prisma.wine.findUnique({
     where: { eventId_position: { eventId, position } },
   });
-  if (!wine) redirect(`/t/${eventId}?tab=scan&manual=nowine`);
+  if (!wine) redirect(`${returnTo}&manual=nowine`);
 
   const taster = await prisma.taster.upsert({
     where: { eventId_idA_idB: { eventId, idA, idB } },
@@ -300,7 +366,7 @@ export async function saveManualCard(form: FormData) {
   });
 
   revalidatePath(`/t/${eventId}`, "layout");
-  redirect(`/t/${eventId}?tab=scan&manual=saved`);
+  redirect(`${returnTo}&manual=saved`);
 }
 
 /**
@@ -317,11 +383,14 @@ export async function saveTeamGuesses(form: FormData) {
   const eventId = String(form.get("eventId"));
   const name = str(form.get("teamName")) ?? "Team 1";
 
-  const team = await prisma.team.upsert({
-    where: { eventId_name: { eventId, name } },
-    create: { eventId, name },
-    update: {},
-  });
+  const teamId = str(form.get("teamId"));
+  const team = teamId
+    ? await prisma.team.findFirst({ where: { id: teamId, eventId } })
+    : await prisma.team.upsert({
+      where: { eventId_name: { eventId, name } },
+      create: { eventId, name }, update: {},
+    });
+  if (!team) return;
 
   const wines = await prisma.wine.findMany({
     where: { eventId }, orderBy: { position: "asc" },
@@ -331,11 +400,15 @@ export async function saveTeamGuesses(form: FormData) {
   const clears: { category: QuizCategory; wineId: string }[] = [];
 
   for (const category of CATEGORIES) {
+    if (!playable(wines, category)) continue;
     const order = optionOrder(eventId, category, wines as unknown as QuizWine[]);
     for (const wine of wines) {
-      const raw = str(form.get(`g:${category}:${wine.id}`));
-      const slot = raw == null ? NaN : parseInt(raw, 10);
-      if (!Number.isFinite(slot) || !order[slot]) { clears.push({ category, wineId: wine.id }); continue; }
+      const field = `g:${category}:${wine.id}`;
+      // A per-wine form must never clear answers from another round.
+      if (!form.has(field)) continue;
+      const raw = str(form.get(field));
+      const slot = raw == null ? NaN : Number(raw);
+      if (!Number.isInteger(slot) || !order[slot]) { clears.push({ category, wineId: wine.id }); continue; }
       writes.push({ category, wineId: wine.id, choiceId: order[slot].id });
     }
   }
@@ -363,7 +436,12 @@ export async function renameTeam(form: FormData) {
 }
 
 export async function deleteTeam(form: FormData) {
-  const team = await prisma.team.delete({ where: { id: String(form.get("teamId")) } });
+  const team = await prisma.$transaction(async (tx) => {
+    const team = await tx.team.delete({ where: { id: String(form.get("teamId")) } });
+    const total = await tx.team.aggregate({ where: { eventId: team.eventId }, _sum: { memberCount: true } });
+    await tx.event.update({ where: { id: team.eventId }, data: { guestCount: total._sum.memberCount } });
+    return team;
+  });
   revalidatePath(`/t/${team.eventId}`, "layout");
 }
 
@@ -374,4 +452,190 @@ export async function nameTaster(form: FormData) {
     data: { name: str(form.get("name")) ?? null },
   });
   revalidatePath(`/t/${taster.eventId}`, "layout");
+}
+
+/** Save the host's cursor atomically with the reveal. Repeated submits do not
+ * skip a step: a stale form always returns to the current round. */
+export async function advanceRound(form: FormData) {
+  const eventId = String(form.get("eventId"));
+  const event = await prisma.event.findUnique({
+    where: { id: eventId }, include: { wines: { orderBy: { position: "asc" } }, teams: true },
+  });
+  if (!event) return;
+  const fromPosition = String(form.get("fromPosition"));
+  const fromStep = String(form.get("fromStep"));
+  if (event.activePosition !== fromPosition || event.runStep !== fromStep || !isRoundStep(fromStep)) {
+    redirect(`/t/${eventId}/run?notice=stale`);
+  }
+  const next = nextRound(event.wines, fromPosition, fromStep);
+  if (!next) redirect(`/t/${eventId}/run`);
+  const ids = ID_SETS[event.idSet] ?? ID_SETS.house;
+  const guests = event.teams.reduce((sum, team) => sum + team.memberCount, 0);
+  if (event.wines.length !== event.wineCount || event.teams.length === 0
+    || !POSITIONS.slice(0, event.wineCount).every((position) => event.wines.some((wine) => wine.position === position))
+    || (!CATEGORIES.some((category) => playable(event.wines, category)) && !mapRoundReady(event.wines, event.mapMode))
+    || (mapEnabled(event.mapMode) && !mapRoundReady(event.wines, event.mapMode)) || guests > ids.a.length * ids.b.length) {
+    redirect(`/t/${eventId}/run?notice=setup`);
+  }
+  await prisma.$transaction(async (tx) => {
+    const cursor = await tx.event.updateMany({
+      where: { id: eventId, activePosition: event.activePosition, runStep: fromStep },
+      data: { activePosition: next.position as typeof event.activePosition, runStep: next.step, revealMode: "BLIND" },
+    });
+    if (!cursor.count) return;
+    const wine = event.wines.find((w) => w.position === next.position)!;
+    if (next.step === "ANSWERS") {
+      await tx.wine.update({ where: { id: wine.id }, data: {
+        stage: wine.stage === "REVEALED" ? "REVEALED" : "LOCKED", keyLockedAt: new Date(),
+      } });
+    } else if (next.step === "REVEAL") {
+      await tx.wine.update({ where: { id: wine.id }, data: { stage: "REVEALED" } });
+    } else if (next.step === "COLLECT") {
+      await tx.wine.update({ where: { id: wine.id }, data: { stage: "POURING" } });
+    }
+  });
+  revalidatePath(`/t/${eventId}`, "layout");
+  redirect(`/t/${eventId}/run`);
+}
+
+/** Save all teams for one glass before revealing it. Earlier wines are untouched. */
+export async function saveRoundAnswers(form: FormData) {
+  const eventId = String(form.get("eventId"));
+  const position = String(form.get("fromPosition"));
+  const event = await prisma.event.findUnique({ where: { id: eventId },
+    include: { wines: { orderBy: { position: "asc" } }, teams: true } });
+  if (!event) return;
+  const wine = event.wines.find((w) => w.position === position);
+  if (!wine) return;
+  if (form.get("intent") === "reveal" && (event.activePosition !== position || event.runStep !== "ANSWERS")) {
+    redirect(`/t/${eventId}/run?notice=stale`);
+  }
+  if (wine.stage !== "REVEALED" && (event.activePosition !== position || event.runStep === "COLLECT")) {
+    redirect(`/t/${eventId}/run?notice=stale`);
+  }
+  const writes: { teamId: string; category: QuizCategory; choiceId: string | null }[] = [];
+  for (const category of CATEGORIES.filter((c) => playable(event.wines, c))) {
+    const order = optionOrder(eventId, category, event.wines);
+    for (const team of event.teams) {
+      const field = `t:${team.id}:${category}`;
+      if (!form.has(field)) continue;
+      const raw = str(form.get(field));
+      const slot = raw == null ? null : Number(raw);
+      if (slot != null && (!Number.isInteger(slot) || !order[slot])) {
+        redirect(`/t/${eventId}/run?notice=invalid`);
+      }
+      writes.push({ teamId: team.id, category, choiceId: slot == null ? null : order[slot].id });
+    }
+  }
+  const mode = mapMode(event.mapMode);
+  const mapWrites: { teamId: string; cell: string | null }[] = [];
+  if (mapEnabled(mode)) {
+    if (!mapRoundReady(event.wines, mode)) redirect(`/t/${eventId}/run?notice=setup`);
+    for (const team of event.teams) {
+      const field = `m:${team.id}`;
+      if (!form.has(field)) continue;
+      const raw = str(form.get(field));
+      const parsed = raw ? parseCell(raw, mode) : null;
+      if (raw && !parsed) redirect(`/t/${eventId}/run?wine=${position}&step=ANSWERS&notice=map`);
+      mapWrites.push({ teamId: team.id, cell: parsed?.cell ?? null });
+    }
+  }
+  await prisma.$transaction([
+    ...writes.map(({ teamId, category, choiceId }) => choiceId == null
+      ? prisma.teamGuess.deleteMany({ where: { teamId, wineId: wine.id, category } })
+      : prisma.teamGuess.upsert({ where: { teamId_wineId_category: { teamId, wineId: wine.id, category } },
+        create: { teamId, wineId: wine.id, category, choiceId }, update: { choiceId } })),
+    ...mapWrites.map(({ teamId, cell }) => cell == null
+      ? prisma.teamMapGuess.deleteMany({ where: { teamId, wineId: wine.id } })
+      : prisma.teamMapGuess.upsert({ where: { teamId_wineId: { teamId, wineId: wine.id } },
+        create: { teamId, wineId: wine.id, cell }, update: { cell } })),
+  ]);
+  revalidatePath(`/t/${eventId}`, "layout");
+  if (form.get("intent") === "reveal") await advanceRound(form);
+  redirect(`/t/${eventId}/run?wine=${position}&step=ANSWERS&notice=saved`);
+}
+
+/** Team sizes are the guest count, so print quantities and scan progress agree. */
+export async function saveTeam(form: FormData) {
+  const eventId = String(form.get("eventId"));
+  const id = str(form.get("teamId"));
+  const name = str(form.get("name"));
+  const memberCount = Number(form.get("memberCount"));
+  if (!name || !Number.isInteger(memberCount) || memberCount < 1 || memberCount > 100) {
+    redirect(`/t/${eventId}?tab=setup&teamError=invalid`);
+  }
+  const duplicate = await prisma.team.findUnique({ where: { eventId_name: { eventId, name } } });
+  if (duplicate && duplicate.id !== id) redirect(`/t/${eventId}?tab=setup&teamError=duplicate`);
+  try {
+    await prisma.$transaction(async (tx) => {
+      if (id) await tx.team.updateMany({ where: { id, eventId }, data: { name, memberCount } });
+      else await tx.team.create({ data: { eventId, name, memberCount } });
+      const total = await tx.team.aggregate({ where: { eventId }, _sum: { memberCount: true } });
+      await tx.event.update({ where: { id: eventId }, data: { guestCount: total._sum.memberCount } });
+    });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      redirect(`/t/${eventId}?tab=setup&teamError=duplicate`);
+    }
+    throw error;
+  }
+  revalidatePath(`/t/${eventId}`, "layout");
+}
+
+/** Refresh an existing bottle without replacing its identity or any cards. */
+export async function refreshWine(form: FormData) {
+  const wine = await prisma.wine.findUnique({ where: { id: String(form.get("wineId")) } });
+  if (!wine?.sourceUrl) return;
+  let failed = false;
+  try {
+    const w = await fetchPolet(wine.sourceUrl);
+    if (!w.name) throw new Error("No product found");
+    await prisma.wine.update({ where: { id: wine.id }, data: {
+      name: w.name, producer: w.producer, vintage: w.vintage, country: w.country,
+      region: w.region, appellation: w.appellation, grapes: w.grapes, tastingNote: w.tastingNote,
+      priceNok: w.priceNok, alcohol: w.alcohol, sugarGl: w.sugarGl, acidGl: w.acidGl,
+      colour: w.colour, smell: w.smell, taste: w.taste, storage: w.storage,
+      bodyRaw: w.bodyRaw, acidRaw: w.acidRaw, tanninRaw: w.tanninRaw, sweetRaw: w.sweetRaw,
+      foodPairing: w.foodPairing, grapeNotes: w.grapeNotes as Prisma.InputJsonValue | undefined,
+      priceBucket: w.priceNok == null ? undefined : bucketForPrice(w.priceNok),
+      ...draftKey(w),
+    } });
+  } catch { failed = true; }
+  revalidatePath(`/t/${wine.eventId}`, "layout");
+  redirect(`/t/${wine.eventId}?tab=wines&refresh=${failed ? "failed" : "saved"}`);
+}
+
+/** Map answers are host-confirmed points; no grape or country is geocoded into a guessed region. */
+export async function setWineMapPoint(form: FormData) {
+  const wine = await prisma.wine.findUnique({ where: { id: String(form.get("wineId")) }, include: { event: true } });
+  if (!wine || !mapEnabled(wine.event.mapMode)) return;
+  const lat = str(form.get("mapLatitude")), lon = str(form.get("mapLongitude"));
+  const mapLatitude = lat == null ? NaN : Number(lat), mapLongitude = lon == null ? NaN : Number(lon);
+  if (!pointCell({ mapLatitude, mapLongitude }, wine.event.mapMode)) {
+    redirect(`/t/${wine.eventId}?tab=wines&mapError=invalid`);
+  }
+  await prisma.wine.update({ where: { id: wine.id }, data: { mapLatitude, mapLongitude } });
+  revalidatePath(`/t/${wine.eventId}`, "layout");
+}
+
+/** A separate, fictional tasting for the printable scanner practice cards. */
+export async function createPracticeTasting() {
+  const event = await prisma.$transaction(async tx => {
+  const created = await tx.event.create({ include: { teams: true, wines: true }, data: {
+    name: "Demo tasting", idSet: "colours", wineCount: 2, guestCount: 2,
+    priceOnCard: false, revealMode: "BLIND", mapMode: "OFF",
+    teams: { create: [{ name: "Foxes", memberCount: 1 }, { name: "Owls", memberCount: 1 }] },
+    wines: { create: [
+      { position: "A", side: "WHITE", name: PRACTICE_WINES.WHITE, priceNok: 150,
+        country: "Frankrike", appellation: "Practice region A", grapes: "Chardonnay",
+        tastingNote: "Practice note: lemon and apple.", keyFlavours: ["Citrus fruit|Lemon", "Orchard fruit|Apple"], keyBody: 2, keyAcidity: 4, keyTannin: 1, keySweetness: 1, keyAlcohol: 2 },
+      { position: "B", side: "RED", name: PRACTICE_WINES.RED, priceNok: 250,
+        country: "Italia", appellation: "Practice region B", grapes: "Gamay",
+        tastingNote: "Practice note: cherry and plum.", keyFlavours: ["Red fruit|Cherry", "Black fruit|Plum"], keyBody: 4, keyAcidity: 3, keyTannin: 4, keySweetness: 1, keyAlcohol: 4 },
+    ] },
+  } });
+  await tx.teamGuess.createMany({ data: demoAnswerRows(created), skipDuplicates: true });
+  return created;
+  });
+  redirect(`/t/${event.id}/run`);
 }

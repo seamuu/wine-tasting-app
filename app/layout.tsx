@@ -22,7 +22,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "Wine Flight",
-  description: "Run a blind tasting from paper cards: print, scan, score, reveal.",
+  description: "Set up a blind wine tasting, print cards, scan answers and compare results.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

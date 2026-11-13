@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   // are never cached.
   async headers() {
     return [{
-      source: "/:file(scan-v2.html|card-v2.html|scan-test.html|card-v1.html|names.html|map.html)",
+      source: "/:file(scanner-wizard.js|scanner-wizard.css|scan-v2.html|card-v2.html|scan-test.html|card-v1.html|names.html|map.html)",
       headers: [{ key: "Cache-Control", value: "no-store, must-revalidate" }],
     }];
   },

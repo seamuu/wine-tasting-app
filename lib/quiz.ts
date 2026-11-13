@@ -32,6 +32,8 @@ export type QuizWine = {
   country: string | null;
   grapes: string | null;
   tastingNote: string | null;
+  mapLatitude?: number | null;
+  mapLongitude?: number | null;
 };
 
 const dec = (v: unknown) => (v == null ? null : Number(String(v)));

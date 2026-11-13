@@ -1,0 +1,70 @@
+[
+  {
+    "file": "A-1.png",
+    "position": "A",
+    "side": "white",
+    "idA": "Red",
+    "idB": "Fox",
+    "rating": 8,
+    "body": 2,
+    "acidity": 4,
+    "tannin": 1,
+    "sweetness": 1,
+    "alcohol": 2,
+    "flavours": [
+      "Citrus fruit|Lemon",
+      "Orchard fruit|Apple"
+    ]
+  },
+  {
+    "file": "A-2.png",
+    "position": "A",
+    "side": "white",
+    "idA": "Red",
+    "idB": "Owl",
+    "rating": 6,
+    "body": 3,
+    "acidity": 4,
+    "tannin": 1,
+    "sweetness": 1,
+    "alcohol": 3,
+    "flavours": [
+      "Citrus fruit|Lemon",
+      "Orchard fruit|Apple"
+    ]
+  },
+  {
+    "file": "B-1.png",
+    "position": "B",
+    "side": "red",
+    "idA": "Red",
+    "idB": "Fox",
+    "rating": 8,
+    "body": 4,
+    "acidity": 3,
+    "tannin": 4,
+    "sweetness": 1,
+    "alcohol": 4,
+    "flavours": [
+      "Red fruit|Cherry",
+      "Black fruit|Plum"
+    ]
+  },
+  {
+    "file": "B-2.png",
+    "position": "B",
+    "side": "red",
+    "idA": "Red",
+    "idB": "Owl",
+    "rating": 6,
+    "body": 4,
+    "acidity": 3,
+    "tannin": 3,
+    "sweetness": 1,
+    "alcohol": 4,
+    "flavours": [
+      "Red fruit|Cherry",
+      "Black fruit|Plum"
+    ]
+  }
+]

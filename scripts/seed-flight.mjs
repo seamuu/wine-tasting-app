@@ -42,14 +42,20 @@ for (const spec of specs) {
     dec(w.priceNok), dec(w.alcohol), dec(w.sugarGl), dec(w.acidGl),
     priceBucket ?? null,
     k.keyBody ?? null, k.keyAcidity ?? null, k.keyTannin ?? null, k.keySweetness ?? null, k.keyAlcohol ?? null,
+    w.colour ?? null, w.smell ?? null, w.taste ?? null, w.storage ?? null,
+    w.bodyRaw ?? null, w.acidRaw ?? null, w.tanninRaw ?? null, w.sweetRaw ?? null,
+    w.foodPairing ?? [], w.grapeNotes ? JSON.stringify(w.grapeNotes) : null,
   ];
   await client.query(
     `INSERT INTO "Wine" ("id","eventId","position","side","name","producer","vintage","country",
         "region","appellation","grapes","tastingNote","sourceUrl","sourceRef",
         "priceNok","alcohol","sugarGl","acidGl","priceBucket",
-        "keyBody","keyAcidity","keyTannin","keySweetness","keyAlcohol")
+        "keyBody","keyAcidity","keyTannin","keySweetness","keyAlcohol",
+        "colour","smell","taste","storage","bodyRaw","acidRaw","tanninRaw","sweetRaw",
+        "foodPairing","grapeNotes")
      VALUES ($1,$2,$3::"FlightPosition",$4::"WineSide",$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-             $15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+             $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,
+             $25,$26,$27,$28,$29,$30,$31,$32,$33,$34::jsonb)
      ON CONFLICT ("eventId","position") DO UPDATE SET
        "side"=EXCLUDED."side", "name"=EXCLUDED."name", "producer"=EXCLUDED."producer",
        "vintage"=EXCLUDED."vintage", "country"=EXCLUDED."country", "region"=EXCLUDED."region",
@@ -59,7 +65,12 @@ for (const spec of specs) {
        "alcohol"=EXCLUDED."alcohol", "sugarGl"=EXCLUDED."sugarGl", "acidGl"=EXCLUDED."acidGl",
        "priceBucket"=EXCLUDED."priceBucket", "keyBody"=EXCLUDED."keyBody",
        "keyAcidity"=EXCLUDED."keyAcidity", "keyTannin"=EXCLUDED."keyTannin",
-       "keySweetness"=EXCLUDED."keySweetness", "keyAlcohol"=EXCLUDED."keyAlcohol"`,
+       "keySweetness"=EXCLUDED."keySweetness", "keyAlcohol"=EXCLUDED."keyAlcohol",
+       "colour"=EXCLUDED."colour", "smell"=EXCLUDED."smell", "taste"=EXCLUDED."taste",
+       "storage"=EXCLUDED."storage", "bodyRaw"=EXCLUDED."bodyRaw",
+       "acidRaw"=EXCLUDED."acidRaw", "tanninRaw"=EXCLUDED."tanninRaw",
+       "sweetRaw"=EXCLUDED."sweetRaw", "foodPairing"=EXCLUDED."foodPairing",
+       "grapeNotes"=EXCLUDED."grapeNotes"`,
     vals);
   console.log(`${position} ${String(side).padEnd(5)} ${w.name} — kr ${w.priceNok} → bucket ${priceBucket}`);
 }

@@ -1,0 +1,91 @@
+{
+  "21132301": {
+    "name": "Champagne Frédéric Thiebault Brut Premier Cru",
+    "sourceUrl": "https://www.vinmonopolet.no/p/21132301",
+    "method": "40 % reservevin, 36 md. på bunnfall.",
+    "traits": {
+      "Alkohol": "12%",
+      "Sukker": "7,3 g/l",
+      "Syre": "5,7 g/l"
+    },
+    "foodPairing": [
+      "Fisk",
+      "Lyst kjøtt",
+      "Svin"
+    ]
+  },
+  "10644301": {
+    "name": "Famille Paquet Mâcon-Lugny Les Charmes Chardonnay 2025",
+    "sourceUrl": "https://www.vinmonopolet.no/p/10644301",
+    "method": "7 måneder på bunnfall. Naturlig gjær og forsiktig filtrering.",
+    "traits": {
+      "Alkohol": "12,5%",
+      "Sukker": "Under 3 g/l",
+      "Syre": "5,1 g/l"
+    },
+    "foodPairing": [
+      "Skalldyr",
+      "Fisk",
+      "Lyst kjøtt"
+    ]
+  },
+  "20576901": {
+    "name": "Rémi Jobard Bourgogne Blanc 2024",
+    "sourceUrl": "https://www.vinmonopolet.no/p/20576901",
+    "method": null,
+    "traits": {
+      "Alkohol": "13%",
+      "Sukker": "Under 3 g/l",
+      "Syre": "4,0 g/l"
+    },
+    "foodPairing": [
+      "Skalldyr",
+      "Fisk",
+      "Lyst kjøtt"
+    ]
+  },
+  "16786001": {
+    "name": "La Pascerette des Vignes Cuvée Saint Vincent Pinot Noir 2025",
+    "sourceUrl": "https://www.vinmonopolet.no/p/16786001",
+    "method": "Tradisjonell metode.",
+    "traits": {
+      "Alkohol": "13%",
+      "Sukker": "Under 3 g/l",
+      "Syre": "4,3 g/l"
+    },
+    "foodPairing": [
+      "Lyst kjøtt",
+      "Storfe",
+      "Storvilt"
+    ]
+  },
+  "20063201": {
+    "name": "Dom. Belleville Rully Chaponnière 2023",
+    "sourceUrl": "https://www.vinmonopolet.no/p/20063201",
+    "method": "Leire-kalksteinjordsmonn, østvendt parsell (climat Chaponnière). Vinstokker plantet på 1980-tallet. 12 md. på franske fat (15 % nye)",
+    "traits": {
+      "Alkohol": "13%",
+      "Sukker": "Under 3 g/l",
+      "Syre": "5,8 g/l"
+    },
+    "foodPairing": [
+      "Lyst kjøtt",
+      "Storfe",
+      "Storvilt"
+    ]
+  },
+  "19899302": {
+    "name": "Madame de Rayne Sauternes 2021",
+    "sourceUrl": "https://www.vinmonopolet.no/p/19899302",
+    "method": "Manuell høst og nøye selektering av de beste botyrtisdruene. Vinifisert på eik. 100 % av vinen lagret 18 md. på eikefat hvorav 30 % ny eik.",
+    "traits": {
+      "Alkohol": "13%",
+      "Sukker": "105 g/l",
+      "Syre": "6,3 g/l"
+    },
+    "foodPairing": [
+      "Ost",
+      "Dessert"
+    ]
+  }
+}

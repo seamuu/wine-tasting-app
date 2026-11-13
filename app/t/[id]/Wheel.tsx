@@ -179,7 +179,7 @@ export default function Wheel({
           <g key={i}>
             <line x1={ix} y1={iy} x2={x} y2={y} stroke={s.slice.category.colour} strokeWidth={0.9} opacity={0.85} />
             <circle cx={x} cy={y} r={2.6} fill={s.slice.category.colour} stroke="#FFFDF8" strokeWidth={0.8}>
-              <title>{`${s.slice.category.name} · ${s.option} — ${s.count}`}</title>
+              <title>{`${s.slice.category.name} · ${s.option}: ${s.count}`}</title>
             </circle>
           </g>
         );

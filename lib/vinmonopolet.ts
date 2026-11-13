@@ -5,11 +5,13 @@
  * which is the answer to the price round, plus measured sugar and acid, which
  * turn two of the answer-key's structure scores from a judgement into a fact.
  *
- * The page is server-rendered with a JSON-LD block and a specification table.
- * We prefer JSON-LD where it exists and fall back to scraping labelled rows,
+ * The page embeds product JSON alongside JSON-LD and a specification table.
+ * We prefer the full product JSON and fall back to JSON-LD and labelled rows,
  * because a missing field should leave a blank for the host to fill rather than
  * a guess.
  */
+
+export type GrapeNote = { name: string; share: string; about: string };
 
 export type PoletWine = {
   name?: string;
@@ -26,7 +28,119 @@ export type PoletWine = {
   tastingNote?: string;
   sourceRef?: string;
   sourceUrl: string;
+
+  // --- from the page's embedded product JSON ---
+  colour?: string;
+  smell?: string;
+  taste?: string;
+  /** Vinmonopolet's sensory ratings, each out of twelve. */
+  bodyRaw?: number;
+  acidRaw?: number;
+  tanninRaw?: number;
+  sweetRaw?: number;
+  /** "Storfe", "Skalldyr", "Ost" - what they say it goes with. */
+  foodPairing?: string[];
+  /** Their written explanation of each grape, which is teaching copy for free. */
+  grapeNotes?: GrapeNote[];
+  storage?: string;
 };
+
+/**
+ * Every product page carries a <script> holding the whole product as JSON:
+ * grapes with percentages, body/acidity/tannin as numbers, food pairings, and
+ * Vinmonopolet's own written explanation of each grape and each measurement.
+ *
+ * Reading that instead of scraping the rendered page fixes two things at once.
+ * The grape list was never reliably in the HTML at all — which is why a whole
+ * flight came back with no grapes — and the structure answer key stopped being
+ * inferred from the alcohol percentage and became their measurement.
+ *
+ * The scrape below is kept as a fallback: this blob is undocumented and may
+ * move, and a wine that loses its pairings is better than a lookup that dies.
+ */
+function fromProductJson(html: string, out: PoletWine): void {
+  let product: Record<string, unknown> | undefined;
+  // A page can contain unrelated or malformed scripts before the product.
+  for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const block = match[1];
+    if (!block.includes('"product"')) continue;
+    try {
+      const parsed = JSON.parse(block.slice(block.indexOf("{"), block.lastIndexOf("}") + 1));
+      const candidate = record(record(parsed)?.product);
+      if (candidate && (typeof candidate.name === "string" || record(candidate.content))) {
+        product = candidate;
+        break;
+      }
+    } catch { /* Keep looking; HTML fallbacks still work without product JSON. */ }
+  }
+  if (!product) return;
+
+  const text = (v: unknown) => (typeof v === "string" && v.trim() ? clean(v) : undefined);
+  const named = (v: unknown) => (v && typeof v === "object" && "name" in v
+    ? text((v as { name: unknown }).name) : undefined);
+
+  out.name ??= text(product.name);
+  out.colour ??= text(product.color);
+  out.smell ??= text(product.smell);
+  out.taste ??= text(product.taste);
+  out.producer ??= named(product.main_producer);
+  out.country ??= named(product.main_country);
+  out.region ??= named(product.district);
+  out.appellation ??= named(product.sub_District);
+  out.priceNok ??= num(String((product.price as { value?: unknown })?.value ?? ""));
+  out.alcohol ??= num(String((product.alcohol as { value?: unknown })?.value ?? ""));
+  const year = text(product.year);
+  if (year && /^(19|20)\d{2}$/.test(year)) out.vintage ??= parseInt(year, 10);
+
+  const content = record(product.content);
+  if (!content) return;
+
+  // Fylde / Friskhet / Garvestoffer / Sodme, each out of twelve
+  const slot: Record<string, "bodyRaw" | "acidRaw" | "tanninRaw" | "sweetRaw"> = {
+    "fylde": "bodyRaw", "friskhet": "acidRaw", "garvestoffer": "tanninRaw", "sødme": "sweetRaw",
+  };
+  for (const ch of records(content.characteristics)) {
+    const key = slot[(text(ch.name) ?? "").toLowerCase()];
+    const value = num(String(ch.value ?? ""));
+    if (key && value != null && Number.isInteger(value) && value >= 1 && value <= 12)
+      out[key] = value;
+  }
+
+  const traits: Record<string, "alcohol" | "sugarGl" | "acidGl"> = {
+    alkohol: "alcohol", sukker: "sugarGl", syre: "acidGl",
+  };
+  for (const trait of records(content.traits)) {
+    const key = traits[(text(trait.name) ?? "").toLowerCase()];
+    const value = num(text(trait.formattedValue));
+    if (key && value != null) out[key] ??= value;
+  }
+
+  const grapes = records(content.ingredients);
+  if (grapes.length) {
+    out.grapes ??= grapes.map((g) => text(g.formattedValue) ?? text(g.name) ?? "").filter(Boolean).join(", ");
+    out.grapeNotes ??= grapes
+      .filter((g) => text(g.name))
+      .map((g) => ({
+        name: text(g.name)!,
+        share: text(g.formattedValue) ?? text(g.name)!,
+        about: text(g.description) ?? "",
+      }));
+  }
+
+  const food = records(content.isGoodFor).map((f) => text(f.name) ?? "").filter(Boolean);
+  if (food.length) out.foodPairing ??= food;
+
+  out.storage ??= text((content.storagePotential as { formattedValue?: unknown })?.formattedValue);
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown> : undefined;
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.flatMap((item) => record(item) ? [record(item)!] : []) : [];
+}
 
 const num = (s: string | undefined): number | undefined => {
   if (!s) return undefined;
@@ -137,20 +251,27 @@ export async function fetchPolet(url: string): Promise<PoletWine> {
   if (!res.ok) throw new Error(`Vinmonopolet returned ${res.status}`);
   const html = await res.text();
 
+  return parsePoletHtml(html, url);
+}
+
+/** Parse a saved page as well as a live response, without needing network access. */
+export function parsePoletHtml(html: string, url: string): PoletWine {
   const out: PoletWine = { sourceUrl: url };
 
   out.sourceRef = url.match(/\/p\/(\d+)/)?.[1];
 
-  // --- JSON-LD, when present, is the most reliable ---
+  fromProductJson(html, out);
+
+  // --- JSON-LD fills gaps left by the full product JSON ---
   for (const block of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     try {
       const data = JSON.parse(block[1]);
       const node = Array.isArray(data) ? data.find((d) => d.name) : data;
       if (!node) continue;
-      if (typeof node.name === "string") out.name = clean(node.name);
-      if (node.brand?.name) out.producer = clean(node.brand.name);
+      if (typeof node.name === "string") out.name ??= clean(node.name);
+      if (node.brand?.name) out.producer ??= clean(node.brand.name);
       const price = node.offers?.price ?? node.offers?.[0]?.price;
-      if (price != null) out.priceNok = num(String(price));
+      if (price != null) out.priceNok ??= num(String(price));
     } catch { /* a malformed block is not worth failing the whole lookup over */ }
   }
 
@@ -170,26 +291,45 @@ export async function fetchPolet(url: string): Promise<PoletWine> {
   out.grapes    ??= labelled(html, "Råstoff") ?? labelled(html, "Druer");
   out.producer  ??= labelled(html, "Produsent");
 
-  const smell = labelled(html, "Lukt");
-  const taste = labelled(html, "Smak");
-  const note = [smell, taste].filter(Boolean).join(" ");
+  out.smell ??= labelled(html, "Lukt");
+  out.taste ??= labelled(html, "Smak");
+  const note = [out.smell, out.taste].filter(Boolean).join(" ");
   if (note) out.tastingNote = note;
 
   // vintage: the year in the product name, not any old four digits on the page
   const year = out.name?.match(/\b(19|20)\d{2}\b/)?.[0];
-  if (year) out.vintage = parseInt(year, 10);
+  if (year) out.vintage ??= parseInt(year, 10);
 
   return out;
 }
 
-/** A rough answer key from what the listing measured. The host edits it. */
+/**
+ * The answer key, from Vinmonopolet’s own sensory ratings.
+ *
+ * Their body/acidity/tannin run 1-12 and the card runs 1-5, so they are
+ * rescaled rather than guessed at. Where a measurement is missing we fall back
+ * to inferring from the numbers on the label — sugar is sweetness, and alcohol
+ * tracks body closely enough to be a starting point — but their sensory rating
+ * always wins. The host edits whatever comes out.
+ */
 export function draftKey(w: PoletWine) {
   const key: Record<string, number | undefined> = {};
-  // sugar and acid are measured, so these two are facts rather than opinions
-  if (w.sugarGl != null) key.keySweetness = w.sugarGl < 5 ? 1 : w.sugarGl < 15 ? 2 : w.sugarGl < 35 ? 3 : 4;
-  if (w.acidGl != null) key.keyAcidity = w.acidGl < 4.5 ? 2 : w.acidGl < 5.5 ? 3 : w.acidGl < 6.5 ? 4 : 5;
-  if (w.alcohol != null) key.keyAlcohol = w.alcohol < 11 ? 1 : w.alcohol < 12.5 ? 2 : w.alcohol < 13.5 ? 3 : w.alcohol < 14.5 ? 4 : 5;
-  // body tracks alcohol closely enough to be a useful starting point
-  if (key.keyAlcohol != null) key.keyBody = Math.min(5, Math.max(1, key.keyAlcohol));
+  const toFive = (v: number) => Math.min(5, Math.max(1, Math.round(1 + ((v - 1) * 4) / 11)));
+
+  if (w.bodyRaw != null) key.keyBody = toFive(w.bodyRaw);
+  if (w.acidRaw != null) key.keyAcidity = toFive(w.acidRaw);
+  if (w.tanninRaw != null) key.keyTannin = toFive(w.tanninRaw);
+  if (w.sweetRaw != null) key.keySweetness = toFive(w.sweetRaw);
+
+  // sugar and acid off the label, for the fields they did not score
+  if (key.keySweetness == null && w.sugarGl != null)
+    key.keySweetness = w.sugarGl < 5 ? 1 : w.sugarGl < 15 ? 2 : w.sugarGl < 35 ? 3 : 4;
+  if (key.keyAcidity == null && w.acidGl != null)
+    key.keyAcidity = w.acidGl < 4.5 ? 2 : w.acidGl < 5.5 ? 3 : w.acidGl < 6.5 ? 4 : 5;
+
+  if (w.alcohol != null)
+    key.keyAlcohol = w.alcohol < 11 ? 1 : w.alcohol < 12.5 ? 2 : w.alcohol < 13.5 ? 3 : w.alcohol < 14.5 ? 4 : 5;
+  if (key.keyBody == null && key.keyAlcohol != null) key.keyBody = key.keyAlcohol;
+
   return key;
 }
