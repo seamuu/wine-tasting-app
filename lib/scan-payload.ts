@@ -8,6 +8,7 @@ export type WineRow = { position: string; name: string; side: string; count: num
 type ScanGroup = { name: string; kind: "one" | "many"; value: string | string[] | null; flag: string | null };
 export type ScanResult = {
   scanId?: string;
+  manuallyEdited?: boolean;
   side: "white" | "red" | null;
   groups: ScanGroup[];
   error?: string;
@@ -83,6 +84,7 @@ export function toPayload(eventId: string, r: ScanResult, buckets: string[], win
     idA: hasName ? you[0].value as string : null,
     idB: hasName ? you[1].value as string : null,
     scanId: r.scanId,
+    manuallyEdited: r.manuallyEdited === true,
     side: r.side === "red" ? "RED" : "WHITE",
     priceBucket: priceBucket >= 0 ? priceBucket : null,
     body: num(one("body")?.value ?? null),

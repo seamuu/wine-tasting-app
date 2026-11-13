@@ -210,6 +210,39 @@ try {
   await host.waitText('All cards collected');
   assert.ok(await host.evaluate("[...document.querySelectorAll('.collection-panel > a')].some(a=>a.textContent.includes('Enter card manually')&&a.getBoundingClientRect().height>0)"), 'Laptop manual entry stays visible after collection');
   note('Direct phone and laptop manual entry: optional names, all tasting fields, independent cards, fresh forms, mobile controls and unchanged live cursor');
+
+  // Correct a partial photo reading before its first save, keeping good values.
+  await phone.clickText('.phone-entry-nav a', 'Scan a card');
+  await phone.send('Page.bringToFront');
+  await until(() => practiceScanner('window.__mapReady===true && !!window.scanWizard'), 'review editor scanner ready');
+  await practiceScanner("loadImage('/practice-cards/B-2.png')");
+  await until(() => practiceScanner("document.documentElement.dataset.scanStep==='summary'&&!!window.__lastRun"), 'review editor card read');
+  const goodRead = await practiceScanner('JSON.parse(JSON.stringify(window.__lastRun))');
+  const bodyRead = goodRead.groups.find(g => g.name === 'Body').value;
+  assert.ok(bodyRead);
+  const additionIndex = goodRead.groups.findIndex(g => g.kind === 'many' && g.reads.some(r => !g.value.includes(r.label)));
+  const additionLabel = goodRead.groups[additionIndex].reads.find(r => !goodRead.groups[additionIndex].value.includes(r.label)).label;
+  const partial = { ...goodRead, groups: goodRead.groups.map(g => ({ ...g, flag: null,
+    value: ['Wine','Rating','You are'].includes(g.name) ? null : g.name === 'Acidity' ? '1' : g.value })) };
+  await practiceScanner(`window.__lastRun=${JSON.stringify(partial)};render(window.__lastRun);document.getElementById('editReadings').click()`);
+  assert.equal(await practiceScanner("document.getElementById('readingEditor').hidden"), false);
+  assert.equal(await practiceScanner("document.getElementById('wizardSummaryPhoto').src.startsWith('data:image/')"), true);
+  assert.equal((await db.query('SELECT count(*) AS n FROM "Submission" s JOIN "Wine" w ON w.id=s."wineId" WHERE w."eventId"=$1 AND w.position=\'B\'', [practice.id])).rows[0].n, '4', 'Editing must not save anything yet');
+  for (const [field, value] of [['Wine','B'], ['Rating','9'], ['Acidity','4']]) {
+    await practiceScanner(`(() => {const index=window.__lastRun.groups.findIndex(g=>g.name===${JSON.stringify(field)});const option=window.__lastRun.groups[index].reads.findIndex(r=>r.label===${JSON.stringify(value)});document.querySelector('#readingEditor input[data-group="'+index+'"][value="'+option+'"]').click();})()`);
+  }
+  await practiceScanner(`(() => {const option=window.__lastRun.groups[${additionIndex}].reads.findIndex(r=>r.label===${JSON.stringify(additionLabel)});document.querySelector('#readingEditor input[data-group="${additionIndex}"][value="'+option+'"]').click();})()`);
+  await phone.screenshot(path.join(directory,'edit-scan-readings-mobile.png'),390,844);
+  assert.ok(await phone.evaluate("document.querySelector('iframe').contentWindow.document.documentElement.scrollWidth<=document.querySelector('iframe').contentWindow.innerWidth"));
+  await practiceScanner("document.getElementById('confirmBtn').click()");
+  await until(() => practiceScanner("document.documentElement.dataset.scanStep==='saved'&&savedCount===5"), 'corrected partial scan saved');
+  const corrected = (await db.query('SELECT s.* FROM "Submission" s JOIN "Wine" w ON w.id=s."wineId" WHERE w."eventId"=$1 AND w.position=\'B\' ORDER BY s."createdAt" DESC LIMIT 1', [practice.id])).rows[0];
+  assert.equal(corrected.status,'MANUAL');assert.equal(corrected.rating,9);assert.equal(corrected.acidity,4);assert.equal(corrected.body,Number(bodyRead));
+  for(const g of goodRead.groups.filter(g=>g.kind==='many')) for(const value of g.value) assert.ok(corrected.flavours.includes(`${g.name}|${value}`));
+  assert.ok(corrected.flavours.includes(`${goodRead.groups[additionIndex].name}|${additionLabel}`));
+  assert.equal(await practiceScanner("document.getElementById('editReadings').hidden"),true);
+  assert.deepEqual((await db.query('SELECT "activePosition","runStep" FROM "Event" WHERE id=$1', [practice.id])).rows[0],manualCursor);
+  note('Scan review corrections fill missing wine/rating and wrong structure/aromas, preserve good readings, and save only after confirmation');
   await db.query('DELETE FROM "Event" WHERE id=$1', [practice.id]);
   note('Create a separate scanner practice tasting with matching two-wine sample-card settings');
   await host.navigate(base);

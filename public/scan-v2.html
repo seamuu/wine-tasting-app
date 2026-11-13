@@ -47,6 +47,11 @@
   .cols{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:1.5rem; align-items:start; }
   @media (max-width:820px){ .cols{ grid-template-columns:1fr; } #results{grid-row:1} }
   .review-actions{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1rem}.review-actions button{min-height:44px}.review-actions [hidden]{display:none}.review-help{font-size:.85rem;color:var(--muted);margin:.8rem 0}.btn-primary{background:var(--ok);color:white;border-color:var(--ok)}
+  .scan-reading-editor{margin-top:1rem}.scan-reading-editor[hidden],#scanReadingSummary[hidden]{display:none}
+  .scan-edit-fields{display:grid;gap:1rem}.scan-edit-group{border:1px solid var(--line);border-radius:8px;padding:.7rem;margin:0;min-width:0}
+  .scan-edit-group legend{font-size:.85rem;font-weight:600;padding:0 .3rem}.scan-edit-group .flag{display:block;margin-bottom:.4rem}
+  .scan-edit-options{display:flex;flex-wrap:wrap;gap:.4rem}.scan-edit-options label{display:inline-flex;align-items:center;gap:.4rem;min-height:44px;padding:.4rem .6rem;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:.85rem}
+  .scan-edit-options label:has(input:checked){border-color:var(--ok);background:var(--surface);font-weight:600}.scan-edit-options input{accent-color:var(--ok);width:1rem;height:1rem;margin:0}
   #dstCanvas{ width:100%; height:auto; border:1px solid var(--line); border-radius:4px; background:#fff; }
 
   .key{ display:flex; flex-wrap:wrap; gap:.5rem 1rem; align-items:center; font-size:.78rem;
@@ -1190,6 +1195,9 @@ function setReviewState(state){
   const complete = expected > 0 && savedCount >= expected;
   if (next){ next.hidden = state !== "saved"; next.textContent = complete ? "Scan another card" : "Scan next card"; }
   if (retry){ retry.hidden = state === "saved"; retry.disabled = state === "saving"; }
+  const edit = document.getElementById("editReadings");
+  if (edit){ edit.hidden = state === "saved"; edit.disabled = state === "saving"; }
+  document.querySelectorAll("#readingEditor input").forEach(input => { input.disabled = state === "saving" || state === "saved"; });
   document.getElementById("file").disabled = state === "saving";
   readBtn.disabled = state === "saving" || !MAP || !corners;
   const help = document.getElementById("reviewHelp");
@@ -1214,8 +1222,8 @@ async function fileScan(result){
     bytes[6] = bytes[6] & 15 | 64; bytes[8] = bytes[8] & 63 | 128;
     const hex = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
     result.scanId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
-    rememberRead(result);
   }
+  rememberRead(result);
   setReviewState("saving");
   notifyParent("card-v2-saving");
   const el = document.getElementById("filed");
@@ -1267,6 +1275,20 @@ function capture(result){
   } catch (e){ /* capture is a convenience, never a requirement */ }
 }
 
+function readingEditor(res, esc){
+  return res.groups.map((group, index) => {
+    const many = group.kind === "many";
+    const choices = group.reads.map((read, option) => {
+      const checked = many ? Array.isArray(group.value) && group.value.includes(read.label) : group.value === read.label;
+      return `<label><input type="${many ? "checkbox" : "radio"}" name="edit-${index}" data-group="${index}" value="${option}"${checked ? " checked" : ""}>${esc(read.label)}</label>`;
+    }).join("");
+    const blank = many ? "" : `<label><input type="radio" name="edit-${index}" data-group="${index}" value="-1"${!group.reads.some(read => read.label === group.value) ? " checked" : ""}>Blank</label>`;
+    const optionalName = group.name.toLowerCase() === "you are";
+    return `<fieldset class="scan-edit-group"><legend>${esc(group.name)}${optionalName ? " · optional" : ""}</legend>
+      <span class="flag">${group.flag && !optionalName ? esc(group.flag) : ""}</span><div class="scan-edit-options">${choices}${blank}</div></fieldset>`;
+  }).join("");
+}
+
 function render(res){
   const g = n => res.groups.find(x => x.name.toLowerCase() === n.toLowerCase());
   const esc = s => String(s).replace(/[<>&]/g, c=>({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c]));
@@ -1286,6 +1308,7 @@ function render(res){
         <span class="big">${res.side ? (res.side === "white" ? "White wine" : "Red wine") : "Side unknown"}</span>
         <span class="t">card-v2</span>
       </div>
+      <div id="scanReadingSummary">
       <div class="row"><span class="k">Taster · optional</span><span class="v">${you ? one(you) : "Unnamed card"}</span></div>
       <div class="row"><span class="k">Wine</span><span class="v">${one(wine)}</span></div>
       ${price ? `<div class="row"><span class="k">Price guess</span><span class="v">${one(price)}</span></div>` : ""}
@@ -1299,10 +1322,16 @@ function render(res){
           : "<span class='flag'>none marked</span>"}</span></div>
       ${flags.length ? `<div class="row"><span class="k">Check</span><span class="v flag">${
         flags.map(f => esc(f.name)+": "+esc(f.flag)).join(" · ")}</span></div>` : ""}
+      </div>
+      <div class="scan-reading-editor" id="readingEditor" hidden>
+        <p class="review-help">Choose the wine and correct any marks below. Names and unanswered tasting fields can stay blank.</p>
+        <div class="scan-edit-fields">${readingEditor(res, esc)}</div>
+      </div>
       <p class="review-help" id="reviewHelp"></p>
       <p class="filed" id="filed" role="status" aria-live="polite" hidden></p>
       <div class="review-actions">
         <button class="btn btn-primary" type="button" id="confirmBtn">Confirm &amp; save</button>
+        <button class="btn" type="button" id="editReadings">Edit readings</button>
         <button class="btn btn-primary" type="button" id="nextCardBtn" hidden>Scan next card</button>
         <button class="btn" type="button" id="retryCardBtn">Retake card</button>
       </div>
@@ -1316,7 +1345,30 @@ function render(res){
         </tbody></table>
       </details>
     </div>`;
-  document.getElementById("confirmBtn").onclick = () => fileScan(res);
+  document.getElementById("editReadings").onclick = (event) => {
+    const editor = document.getElementById("readingEditor");
+    if (!editor.hidden) { render(res); return; }
+    document.getElementById("scanReadingSummary").hidden = true;
+    editor.hidden = false;
+    event.currentTarget.textContent = "View summary";
+  };
+  document.getElementById("readingEditor").onchange = (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.dataset.group == null) return;
+    const index = Number(input.dataset.group), group = res.groups[index];
+    if (group.kind === "many") {
+      group.value = [...document.querySelectorAll(`#readingEditor input[data-group="${index}"]:checked`)].map(option => group.reads[Number(option.value)].label);
+    } else {
+      group.value = Number(input.value) < 0 ? null : group.reads[Number(input.value)].label;
+    }
+    group.flag = null;
+    input.closest("fieldset").querySelector(".flag").textContent = "";
+    res.manuallyEdited = true;
+  };
+  document.getElementById("confirmBtn").onclick = () => {
+    if (!document.getElementById("readingEditor").hidden) render(res);
+    fileScan(res);
+  };
   document.getElementById("nextCardBtn").onclick = chooseNextCard;
   document.getElementById("retryCardBtn").onclick = chooseNextCard;
   window.scanWizard?.summary();

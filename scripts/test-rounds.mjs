@@ -79,6 +79,7 @@ assert.equal(unnamedPayload.idB, null);
 assert.equal(unnamedPayload.needsReview, false, "Optional name bubbles must not flag an otherwise valid card");
 assert.equal(unnamedPayload.scanId, "optional-name-scan-001");
 assert.equal(unnamedPayload.rating, 8);
+assert.equal(toPayload("event", { ...unnamedScan, manuallyEdited: true }, [], [{ position: "A", side: "WHITE", count: 0, name: "Hidden" }]).manuallyEdited, true);
 const partialName = toPayload("event", { ...scan, groups: scan.groups.filter(g => g.value !== "Mommy") }, [], [{ position: "A", side: "WHITE", count: 0, name: "Hidden" }]);
 assert.equal(partialName.idA, null);
 assert.equal(partialName.idB, null, "An incomplete pair must save independently, not join a named taster");

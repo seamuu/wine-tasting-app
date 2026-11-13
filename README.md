@@ -161,6 +161,10 @@ or the laptop's collection screen. Tap the rating, structure and flavour marks,
 then **Save card**. Names stay optional; the next entry opens as a fresh card for
 the same wine, and the host’s count updates automatically.
 
+On a photo's review screen, **Edit readings** lets you fill missing marks, correct
+misread values or clear unanswered fields while keeping the photo visible.
+Existing readings are preselected. Changes are saved only with **Confirm & save**.
+
 A failed scan can also be corrected by hand. Use dark pen, flat cards and
 even lighting. Test one printed sheet before printing the full pack. Phone
 camera use still needs a check on the actual device over HTTPS.

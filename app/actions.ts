@@ -264,6 +264,7 @@ export type ScanPayload = {
   idA: string | null;
   idB: string | null;
   scanId?: string;
+  manuallyEdited?: boolean;
   submissionId?: string;
   side: "WHITE" | "RED";
   priceBucket: number | null;
@@ -284,7 +285,7 @@ export type ScanPayload = {
  * gets its own identity, with a stable scan key for safe retries.
  */
 export async function saveScan(payload: ScanPayload) {
-  return persistCard(payload, payload.needsReview ? "NEEDS_REVIEW" : "CONFIRMED");
+  return persistCard(payload, payload.needsReview ? "NEEDS_REVIEW" : payload.manuallyEdited ? "MANUAL" : "CONFIRMED");
 }
 
 async function persistCard(payload: ScanPayload, status: "CONFIRMED" | "NEEDS_REVIEW" | "MANUAL") {
