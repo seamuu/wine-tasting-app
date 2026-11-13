@@ -34,13 +34,16 @@ export type CardValues = {
   rating: number | null; flavours: string[];
 };
 
-export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, priceOnCard = true }: {
+export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, priceOnCard = true, expanded = false, entryId, submitLabel = "File this card" }: {
   eventId: string;
   idSet: { label: string; a: string[]; b: string[] };
   wines: WineRow[];
   fixing?: CardValues | null;
-  returnTo?: "run";
+  returnTo?: "run" | "phone";
   priceOnCard?: boolean;
+  expanded?: boolean;
+  entryId?: string;
+  submitLabel?: string;
 }) {
   const [position, setPosition] = useState(fixing?.position ?? wines[0]?.position ?? "A");
   const wine = wines.find((w) => w.position === position);
@@ -50,9 +53,9 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
   if (wines.length === 0) return null;
 
   return (
-    <details className="card" style={{ marginTop: "1.2rem" }} open={!!fixing} id="manual-card">
+    <details className="card" style={{ marginTop: "1.2rem" }} open={expanded || !!fixing} id="manual-card">
       <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: ".9rem" }}>
-        {fixing ? `Fixing ${tasterLabel(fixing)}: wine ${fixing.position}` : "Type a card in by hand"}
+        {fixing ? `Fixing ${tasterLabel(fixing)}: wine ${fixing.position}` : "Enter card manually"}
       </summary>
       <p className="small" style={{ margin: ".6rem 0 1.2rem" }}>
         {fixing
@@ -62,6 +65,7 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
 
       <form action={saveManualCard} className="stack" style={{ gap: "1.4rem" }}>
         <input type="hidden" name="eventId" value={eventId} />
+        {entryId && <input type="hidden" name="scanId" value={entryId} />}
         {fixing && <input type="hidden" name="submissionId" value={fixing.id} />}
         {returnTo && <input type="hidden" name="returnTo" value={returnTo} />}
 
@@ -90,6 +94,16 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
                 {idSet.b.map((c) => <Chip key={c} name="idB" value={c} label={c} defaultChecked={fixing?.idB === c} />)}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div>
+          <span className="label">Rating: 1 to 10</span>
+          <div className="chips" style={{ marginTop: ".35rem" }}>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+              <Chip key={n} name="rating" value={String(n)} label={String(n)}
+                    defaultChecked={fixing?.rating === n} />
+            ))}
           </div>
         </div>
 
@@ -150,18 +164,8 @@ export default function ManualCard({ eventId, idSet, wines, fixing, returnTo, pr
           </div>
         </div>
 
-        <div>
-          <span className="label">Rating: 1 to 10</span>
-          <div className="chips" style={{ marginTop: ".35rem" }}>
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <Chip key={n} name="rating" value={String(n)} label={String(n)}
-                    defaultChecked={fixing?.rating === n} />
-            ))}
-          </div>
-        </div>
-
-        <div className="row">
-          <SubmitButton>File this card</SubmitButton>
+        <div className="row manual-card-actions">
+          <SubmitButton>{submitLabel}</SubmitButton>
           <span className="small">Choose the wine. Everything else is optional.</span>
         </div>
       </form>

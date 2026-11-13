@@ -156,7 +156,12 @@ and posts to `/api/scan`; the surrounding app also handles the scanner message
 as a fallback. Both save to the same person-and-wine row, so re-scans replace
 previous readings. The guided flow rejects cards belonging to another wine.
 
-A failed scan can be entered or corrected by hand. Use dark pen, flat cards and
+A card can be entered directly with **Enter card manually** on the phone scanner
+or the laptop's collection screen. Tap the rating, structure and flavour marks,
+then **Save card**. Names stay optional; the next entry opens as a fresh card for
+the same wine, and the host’s count updates automatically.
+
+A failed scan can also be corrected by hand. Use dark pen, flat cards and
 even lighting. Test one printed sheet before printing the full pack. Phone
 camera use still needs a check on the actual device over HTTPS.
 

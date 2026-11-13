@@ -10,6 +10,11 @@
 
 Only individual tasting cards are scanned. The host enters real teams’ quiz and map answers manually. Re-scanning and confirming the same person + wine replaces that card, so it does not increase the collected count.
 
+For entry without a photo, choose **Enter card manually** at the top of the phone
+scanner or in the laptop’s collection panel. Fill any rating, structure and
+flavours from the card, then **Save card**. Names are optional. Each save opens a
+fresh form for the same wine; the laptop count updates as usual.
+
 Setup is one vertical flow: **The tasting → Teams → Wines → Print**. Save the first section to continue to Teams. Card settings are optional, and **Start the quiz** stays visible at the top. Wine details, score breakdowns and other secondary controls are collapsed until needed. The optional guest TV view is under **More options → Show on a TV**.
 
 For cards matching a different tasting, use **Filled-in cards for a scan test ↗** under Setup → Print. Those settings must match the tasting’s names, wine count and price row. The downloadable PDFs above match the default two-wine demo.

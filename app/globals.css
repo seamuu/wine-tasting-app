@@ -395,8 +395,21 @@ a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px soli
   .collection-status { padding:1.2rem; }
   .phone-scanner-page { padding-left:.6rem; padding-right:.6rem; }
 }
-.phone-wizard-page { width:100%; height:100dvh; overflow:hidden; }
+.phone-wizard-page { width:100%; height:100dvh; overflow:hidden; display:grid; grid-template-rows:auto minmax(0,1fr); }
 .phone-wizard-frame { display:block; width:100%; height:100%; border:0; }
+.phone-entry-nav { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; padding:.7rem .8rem; background:var(--paper); border-bottom:1px solid var(--rule); }
+.phone-entry-nav .btn { min-height:44px; }
+.phone-manual-page { max-width:820px; padding:0 .8rem 3rem; }
+.phone-manual-page .phone-entry-nav { padding:.7rem 0; position:sticky; top:0; z-index:20; }
+.phone-manual-heading { margin:1.2rem 0; }
+.phone-manual-heading h1 { font-size:2.3rem; margin:.3rem 0; }
+.phone-manual-page > .btn { margin-top:1.2rem; }
+.phone-manual-page .chip span { min-height:40px; min-width:2.2rem; }
+.phone-manual-page .manual-card-actions { position:sticky; bottom:0; z-index:10; background:var(--paper-2); padding:.8rem 0; border-top:1px solid var(--rule); }
+.collection-panel > .btn { margin:1rem 0; }
+@media(max-width:480px) {
+  .phone-manual-page .field-row { grid-template-columns:minmax(0,1fr); gap:.3rem; }
+}
 
 /* One vertical setup flow, with the current task expanded. */
 :root { --reference:#174c6b; }

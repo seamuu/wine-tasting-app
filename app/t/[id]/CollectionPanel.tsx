@@ -37,10 +37,11 @@ export default function CollectionPanel({ eventId, position, initial, phoneUrl, 
       <span className="label">Wine {position} · tasting cards</span>
       <h3>{complete ? "✓ All cards collected" : `${collection.count} of ${collection.expected} cards collected`}</h3>
       <progress value={Math.min(collection.count, collection.expected)} max={Math.max(1, collection.expected)} aria-label={`Cards collected for wine ${position}`} />
-      <p>Confirm each scan on your phone. You can continue to team answers at any time.</p>
+      <p>Scan the cards or enter them manually. You can continue to team answers at any time.</p>
       {collection.reviewed > 0 && <p className="flag">{collection.reviewed} {collection.reviewed === 1 ? "card needs" : "cards need"} a check.</p>}
       {offline && <p className="flag">Connection interrupted. Retrying…</p>}
     </div>
+    <a className="btn" href={`/t/${eventId}/scan?wine=${position}&mode=manual`}>Enter card manually →</a>
     <details className="phone-connection card" open={!complete}>
       <summary>Scan with your phone</summary>
       <div className="phone-connect-content">

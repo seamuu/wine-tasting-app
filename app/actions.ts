@@ -352,8 +352,9 @@ export async function saveManualCard(form: FormData) {
   const idA = str(form.get("idA"));
   const idB = str(form.get("idB"));
 
-  const returnTo = str(form.get("returnTo")) === "run"
-    ? `/t/${eventId}/run?wine=${position}&step=COLLECT` : `/t/${eventId}?tab=scan`;
+  const destination = str(form.get("returnTo"));
+  const returnTo = destination === "phone" ? `/t/${eventId}/scan?wine=${position}&mode=manual`
+    : destination === "run" ? `/t/${eventId}/run?wine=${position}&step=COLLECT` : `/t/${eventId}?tab=scan`;
 
   const wine = await prisma.wine.findUnique({
     where: { eventId_position: { eventId, position } },
@@ -362,7 +363,7 @@ export async function saveManualCard(form: FormData) {
 
   const saved = await persistCard({
     eventId, winePosition: position, idA: idA ?? null, idB: idB ?? null,
-    submissionId: str(form.get("submissionId")), needsReview: false,
+    submissionId: str(form.get("submissionId")), scanId: str(form.get("scanId")), needsReview: false,
     side: wine.side,
     priceBucket: int(form.get("priceBucket")) ?? null,
     body: int(form.get("body")) ?? null,
